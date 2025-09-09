@@ -11,7 +11,7 @@ def download_singbox():
         os.makedirs("temp", exist_ok=True)
         
         # 固定使用Linux AMD64版本
-        version = "1.11.5"
+        version = "1.12.4"
         url = f"https://github.com/SagerNet/sing-box/releases/download/v{version}/sing-box-{version}-linux-amd64.tar.gz"
         output_file = "temp/sing-box.tar.gz"
         
