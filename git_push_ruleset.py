@@ -26,7 +26,7 @@ def run_command(command):
         return False
 
 def push_to_ruleset_branch():
-    """推送one-china.srs到rule-set分支"""
+    """推送 srs json 到rule-set分支"""
     try:
         # 检查文件是否存在
         if not os.path.exists("one-china.srs"):
@@ -61,8 +61,8 @@ def push_to_ruleset_branch():
         run_command("git rm -rf --cached .")
         
         # 添加文件
-        print("添加one-china.srs文件")
-        run_command("git add one-china.srs -f")
+        print("添加one-china.srs和one-china.json文件")
+        run_command("git add one-china.srs one-china.json -f")
         
         # 提交更改
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
