@@ -32,7 +32,7 @@ def download_singbox():
         
         # 移动二进制文件
         binary_name = "sing-box"
-        extracted_dir = "temp/sing-box-1.11.5-linux-amd64"
+        extracted_dir = "temp/sing-box-1.12.4-linux-amd64"
         shutil.copy(f"{extracted_dir}/{binary_name}", binary_name)
         
         # 修改权限使其可执行
