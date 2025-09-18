@@ -1,17 +1,29 @@
 import json
 import os
 
-def create_ruleset_json():
-    """读取china.txt文件并创建sing-box规则集JSON文件"""
+def load_config():
+    """加载配置文件"""
     try:
-        # 检查china.txt是否存在
-        if not os.path.exists("china.txt"):
-            print("错误: china.txt 文件不存在")
+        with open("link.json", 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"加载配置文件失败: {e}")
+        return None
+
+def create_ruleset_json(ruleset_name, ruleset_config):
+    """根据配置创建sing-box规则集JSON文件"""
+    try:
+        txt_file = f"temp/{ruleset_config['output']}.txt"
+        json_file = f"{ruleset_config['output']}.json"
+        
+        # 检查txt文件是否存在
+        if not os.path.exists(txt_file):
+            print(f"错误: {txt_file} 文件不存在")
             return False
         
         # 读取IP地址列表
         ip_cidrs = []
-        with open("china.txt", 'r') as f:
+        with open(txt_file, 'r', encoding='utf-8') as f:
             for line in f:
                 # 去掉首尾空格
                 line = line.strip()
@@ -29,15 +41,27 @@ def create_ruleset_json():
         }
         
         # 保存到文件
-        with open("one-china.json", 'w') as f:
+        with open(json_file, 'w', encoding='utf-8') as f:
             json.dump(ruleset, f, indent=4)
         
-        print(f"已创建规则集JSON文件: one-china.json，包含 {len(ip_cidrs)} 条IP规则")
+        print(f"已创建规则集JSON文件: {json_file}，包含 {len(ip_cidrs)} 条IP规则")
         return True
     
     except Exception as e:
         print(f"创建规则集JSON时出错: {e}")
         return False
 
+def main():
+    # 加载配置
+    config = load_config()
+    if not config:
+        return
+
+    # 处理所有规则集
+    for ruleset_name, ruleset_config in config['rulesets'].items():
+        print(f"\n创建规则集: {ruleset_name}")
+        if not create_ruleset_json(ruleset_name, ruleset_config):
+            print(f"规则集 {ruleset_name} 创建失败")
+
 if __name__ == "__main__":
-    create_ruleset_json()
+    main()
