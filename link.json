@@ -18,10 +18,18 @@
                 "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/unicom6.txt"
             ],
             "output": "cn_ip"
+        },
+        "telegram": {
+            "name": "telegram",
+            "description": "telegram ip",
+            "sources": [
+                "https://core.telegram.org/resources/cidr.txt"
+            ],
+            "output": "telegram_ip"
         }
     },
     "sing_box": {
-        "version": "1.12.4",
+        "version": "1.12.8",
         "platform": "linux-amd64"
     }
 }
