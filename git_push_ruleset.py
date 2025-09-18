@@ -1,7 +1,18 @@
 import os
+import json
 import subprocess
 import time
+import glob
 from datetime import datetime
+
+def load_config():
+    """加载配置文件"""
+    try:
+        with open("link.json", 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"加载配置文件失败: {e}")
+        return None
 
 def run_command(command):
     """运行shell命令并返回结果"""
@@ -25,13 +36,43 @@ def run_command(command):
         print(f"执行命令时出错: {e}")
         return False
 
+def get_ruleset_files():
+    """获取所有生成的规则集文件"""
+    config = load_config()
+    if not config:
+        return []
+    
+    files_to_add = []
+    for ruleset_name, ruleset_config in config['rulesets'].items():
+        output_name = ruleset_config['output']
+        json_file = f"{output_name}.json"
+        srs_file = f"{output_name}.srs"
+        
+        if os.path.exists(json_file):
+            files_to_add.append(json_file)
+            print(f"找到文件: {json_file}")
+        else:
+            print(f"警告: {json_file} 文件不存在")
+            
+        if os.path.exists(srs_file):
+            files_to_add.append(srs_file)
+            print(f"找到文件: {srs_file}")
+        else:
+            print(f"警告: {srs_file} 文件不存在")
+    
+    return files_to_add
+
 def push_to_ruleset_branch():
-    """推送 srs json 到rule-set分支"""
+    """推送所有规则集文件到rule-set分支"""
     try:
-        # 检查文件是否存在
-        if not os.path.exists("one-china.srs"):
-            print("错误: one-china.srs 文件不存在")
+        # 获取要推送的文件列表
+        files_to_add = get_ruleset_files()
+        
+        if not files_to_add:
+            print("错误: 没有找到任何规则集文件")
             return False
+        
+        print(f"准备推送 {len(files_to_add)} 个文件: {', '.join(files_to_add)}")
         
         # 配置Git
         print("配置Git")
@@ -60,13 +101,14 @@ def push_to_ruleset_branch():
         # 清除工作区
         run_command("git rm -rf --cached .")
         
-        # 添加文件
-        print("添加one-china.srs和one-china.json文件")
-        run_command("git add one-china.srs one-china.json -f")
+        # 添加所有规则集文件
+        print(f"添加规则集文件: {' '.join(files_to_add)}")
+        for file in files_to_add:
+            run_command(f"git add {file} -f")
         
         # 提交更改
         current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        commit_message = f"Update China IP ruleset - {current_time}"
+        commit_message = f"Update IP rulesets - {current_time}"
         run_command(f'git commit -m "{commit_message}"')
         
         # 推送到远程

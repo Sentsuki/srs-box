@@ -1,4 +1,4 @@
-name: Update China IP Ruleset
+name: Update IP Rulesets
 
 on:
   schedule:
@@ -25,14 +25,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
       
-      - name: Download and merge China IP lists
-        run: python download_ip_lists.py
-      
-      - name: Create ruleset JSON
-        run: python create_ruleset.py
-      
-      - name: Download and compile with sing-box
-        run: python download_and_compile.py
+      - name: Generate all rulesets
+        run: python main.py
       
       - name: Push to rule-set branch
         run: python git_push_ruleset.py
