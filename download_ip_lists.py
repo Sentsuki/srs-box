@@ -5,7 +5,7 @@ import requests
 def load_config():
     """加载配置文件"""
     try:
-        with open("link.json", 'r', encoding='utf-8') as f:
+        with open("config.json", 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print(f"加载配置文件失败: {e}")
@@ -27,10 +27,10 @@ def download_file(url, output_file):
         print(f"下载失败: {url}, 错误: {e}")
         return False
 
-def process_ruleset(ruleset_name, ruleset_config):
+def process_ruleset(ruleset_name, urls):
     """处理单个规则集"""
     print(f"\n处理规则集: {ruleset_name}")
-    print(f"描述: {ruleset_config.get('description', '无描述')}")
+    print(f"数据源数量: {len(urls)}")
     
     # 创建临时目录
     temp_dir = f"temp/{ruleset_name}"
@@ -38,13 +38,13 @@ def process_ruleset(ruleset_name, ruleset_config):
 
     # 下载所有源文件
     temp_files = []
-    for i, url in enumerate(ruleset_config['sources'], start=1):
+    for i, url in enumerate(urls, start=1):
         temp_file = f"{temp_dir}/file_{i}.txt"
         if download_file(url, temp_file):
             temp_files.append(temp_file)
 
-    # 合并文件 - 使用临时文件名
-    output_file = f"temp/{ruleset_config['output']}.txt"
+    # 合并文件 - 输出名字就是规则集名字
+    output_file = f"temp/{ruleset_name}.txt"
     with open(output_file, 'w', encoding='utf-8') as outfile:
         for infile in temp_files:
             try:
@@ -69,8 +69,8 @@ def main():
     os.makedirs("temp", exist_ok=True)
 
     # 处理所有规则集
-    for ruleset_name, ruleset_config in config['rulesets'].items():
-        if not process_ruleset(ruleset_name, ruleset_config):
+    for ruleset_name, urls in config['rulesets'].items():
+        if not process_ruleset(ruleset_name, urls):
             print(f"规则集 {ruleset_name} 处理失败")
 
 if __name__ == "__main__":

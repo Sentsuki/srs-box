@@ -8,7 +8,7 @@ import shutil
 def load_config():
     """加载配置文件"""
     try:
-        with open("link.json", 'r', encoding='utf-8') as f:
+        with open("config.json", 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print(f"加载配置文件失败: {e}")
@@ -57,11 +57,11 @@ def download_singbox(config):
         print(f"下载或解压sing-box时出错: {e}")
         return None
 
-def compile_ruleset(binary_name, ruleset_name, ruleset_config):
+def compile_ruleset(binary_name, ruleset_name):
     """使用sing-box编译规则集"""
     try:
-        json_file = f"{ruleset_config['output']}.json"
-        srs_file = f"{ruleset_config['output']}.srs"
+        json_file = f"{ruleset_name}.json"
+        srs_file = f"{ruleset_name}.srs"
         
         # 检查规则集JSON是否存在
         if not os.path.exists(json_file):
@@ -99,8 +99,8 @@ def main():
     
     # 编译所有规则集
     success_count = 0
-    for ruleset_name, ruleset_config in config['rulesets'].items():
-        if compile_ruleset(binary_name, ruleset_name, ruleset_config):
+    for ruleset_name, urls in config['rulesets'].items():
+        if compile_ruleset(binary_name, ruleset_name):
             success_count += 1
     
     print(f"\n编译完成，成功编译 {success_count}/{len(config['rulesets'])} 个规则集")

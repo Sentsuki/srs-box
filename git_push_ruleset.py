@@ -8,7 +8,7 @@ from datetime import datetime
 def load_config():
     """加载配置文件"""
     try:
-        with open("link.json", 'r', encoding='utf-8') as f:
+        with open("config.json", 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print(f"加载配置文件失败: {e}")
@@ -43,10 +43,9 @@ def get_ruleset_files():
         return []
     
     files_to_add = []
-    for ruleset_name, ruleset_config in config['rulesets'].items():
-        output_name = ruleset_config['output']
-        json_file = f"{output_name}.json"
-        srs_file = f"{output_name}.srs"
+    for ruleset_name, urls in config['rulesets'].items():
+        json_file = f"{ruleset_name}.json"
+        srs_file = f"{ruleset_name}.srs"
         
         if os.path.exists(json_file):
             files_to_add.append(json_file)

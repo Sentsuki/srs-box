@@ -1,0 +1,26 @@
+{
+    "rulesets": {
+        "cn_ip": [
+            "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cernet.txt",
+            "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cernet6.txt",
+            "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/chinanet.txt",
+            "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/chinanet6.txt",
+            "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cmcc.txt",
+            "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cmcc6.txt",
+            "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cstnet.txt",
+            "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cstnet6.txt",
+            "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/drpeng.txt",
+            "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/drpeng6.txt",
+            "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/unicom.txt",
+            "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/unicom6.txt"
+        ],
+        "telegram_ip": [
+            "https://core.telegram.org/resources/cidr.txt"
+        ]
+    },
+    "sing_box": {
+        "version": "1.12.8",
+        "platform": "linux-amd64"
+    },
+    "version": 3
+}

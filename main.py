@@ -8,7 +8,7 @@ import os
 def load_config():
     """加载配置文件"""
     try:
-        with open("link.json", 'r', encoding='utf-8') as f:
+        with open("config.json", 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print(f"加载配置文件失败: {e}")
@@ -51,8 +51,8 @@ def main():
     print(f"   sing-box版本: {config['sing_box']['version']}")
     print(f"   平台: {config['sing_box']['platform']}")
     
-    for name, ruleset in config['rulesets'].items():
-        print(f"   - {name}: {ruleset['description']}")
+    for name, urls in config['rulesets'].items():
+        print(f"   - {name}: {len(urls)} 个数据源")
     
     # 执行步骤
     steps = [
@@ -71,9 +71,8 @@ def main():
     
     # 显示生成的文件
     print(f"\n📁 生成的文件:")
-    for name, ruleset in config['rulesets'].items():
-        output_name = ruleset['output']
-        files = [f"{output_name}.json", f"{output_name}.srs"]
+    for name, urls in config['rulesets'].items():
+        files = [f"{name}.json", f"{name}.srs"]
         for file in files:
             if os.path.exists(file):
                 size = os.path.getsize(file)

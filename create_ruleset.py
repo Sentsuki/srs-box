@@ -4,17 +4,17 @@ import os
 def load_config():
     """加载配置文件"""
     try:
-        with open("link.json", 'r', encoding='utf-8') as f:
+        with open("config.json", 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception as e:
         print(f"加载配置文件失败: {e}")
         return None
 
-def create_ruleset_json(ruleset_name, ruleset_config):
+def create_ruleset_json(ruleset_name, config_version):
     """根据配置创建sing-box规则集JSON文件"""
     try:
-        txt_file = f"temp/{ruleset_config['output']}.txt"
-        json_file = f"{ruleset_config['output']}.json"
+        txt_file = f"temp/{ruleset_name}.txt"
+        json_file = f"{ruleset_name}.json"
         
         # 检查txt文件是否存在
         if not os.path.exists(txt_file):
@@ -30,9 +30,9 @@ def create_ruleset_json(ruleset_name, ruleset_config):
                 if line:
                     ip_cidrs.append(line)
         
-        # 创建规则集JSON结构
+        # 创建规则集JSON结构，使用配置文件中的version
         ruleset = {
-            "version": 3,
+            "version": config_version,
             "rules": [
                 {
                     "ip_cidr": ip_cidrs
@@ -58,9 +58,9 @@ def main():
         return
 
     # 处理所有规则集
-    for ruleset_name, ruleset_config in config['rulesets'].items():
+    for ruleset_name, urls in config['rulesets'].items():
         print(f"\n创建规则集: {ruleset_name}")
-        if not create_ruleset_json(ruleset_name, ruleset_config):
+        if not create_ruleset_json(ruleset_name, config['version']):
             print(f"规则集 {ruleset_name} 创建失败")
 
 if __name__ == "__main__":
