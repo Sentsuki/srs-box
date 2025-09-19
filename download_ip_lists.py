@@ -65,7 +65,6 @@ def merge_json_rulesets(json_rulesets, config_version):
     """智能合并多个JSON规则集，将相同类型的规则合并在一起"""
     # 用于存储合并后的规则，按规则类型分组
     rule_groups = {}
-    filtered_count = 0
     
     for json_data in json_rulesets:
         rules = []
@@ -89,16 +88,18 @@ def merge_json_rulesets(json_rulesets, config_version):
                 if rule_type not in rule_groups:
                     rule_groups[rule_type] = []
                 
-                # 合并规则值，去重并过滤
+                # 合并规则值，去重
                 for value in rule_values:
-                    # 检查是否需要过滤
-                    if should_filter_rule_value(value):
-                        filtered_count += 1
-                        continue
-                    
-                    # 去重添加
                     if value not in rule_groups[rule_type]:
                         rule_groups[rule_type].append(value)
+    
+    # 合并完成后，统一过滤所有规则
+    filtered_count = 0
+    for rule_type, rule_values in rule_groups.items():
+        original_count = len(rule_values)
+        # 过滤掉包含特定关键字的规则
+        rule_groups[rule_type] = [value for value in rule_values if not should_filter_rule_value(value)]
+        filtered_count += original_count - len(rule_groups[rule_type])
     
     # 将分组的规则转换为最终格式
     merged_rules = []
