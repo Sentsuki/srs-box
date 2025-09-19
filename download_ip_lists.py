@@ -27,10 +27,90 @@ def download_file(url, output_file):
         print(f"下载失败: {url}, 错误: {e}")
         return False
 
-def process_ruleset(ruleset_name, urls):
+def is_json_ruleset(url):
+    """检查URL是否为JSON规则集（后缀为.json或.list）"""
+    url_lower = url.lower()
+    return url_lower.endswith('.json') or url_lower.endswith('.list')
+
+def download_json_ruleset(url):
+    """下载并解析JSON规则集"""
+    try:
+        print(f"下载JSON规则集: {url}")
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        
+        # 解析JSON
+        json_data = response.json()
+        return json_data
+        
+    except Exception as e:
+        print(f"下载JSON规则集失败: {url}, 错误: {e}")
+        return None
+
+def merge_json_rulesets(json_rulesets, config_version):
+    """合并多个JSON规则集"""
+    merged_rules = []
+    
+    for json_data in json_rulesets:
+        if 'rules' in json_data and isinstance(json_data['rules'], list):
+            merged_rules.extend(json_data['rules'])
+        else:
+            # 如果JSON结构不标准，尝试直接作为规则处理
+            merged_rules.append(json_data)
+    
+    # 创建合并后的规则集
+    merged_ruleset = {
+        "version": config_version,
+        "rules": merged_rules
+    }
+    
+    return merged_ruleset
+
+def process_ruleset(ruleset_name, urls, config_version):
     """处理单个规则集"""
     print(f"\n处理规则集: {ruleset_name}")
     print(f"数据源数量: {len(urls)}")
+    
+    # 检查是否有JSON规则集
+    json_urls = [url for url in urls if is_json_ruleset(url)]
+    txt_urls = [url for url in urls if not is_json_ruleset(url)]
+    
+    # 处理JSON规则集
+    if json_urls:
+        print(f"发现 {len(json_urls)} 个JSON规则集，开始下载和合并")
+        json_rulesets = []
+        
+        # 下载所有JSON规则集
+        for url in json_urls:
+            json_data = download_json_ruleset(url)
+            if json_data:
+                json_rulesets.append(json_data)
+        
+        if json_rulesets:
+            # 合并JSON规则集
+            if len(json_rulesets) == 1:
+                # 只有一个JSON文件，直接使用
+                merged_ruleset = json_rulesets[0]
+                print(f"使用单个JSON规则集")
+            else:
+                # 多个JSON文件，需要合并
+                merged_ruleset = merge_json_rulesets(json_rulesets, config_version)
+                print(f"已合并 {len(json_rulesets)} 个JSON规则集")
+            
+            # 保存合并后的规则集
+            output_file = f"{ruleset_name}.json"
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(merged_ruleset, f, indent=4)
+            
+            print(f"JSON规则集已保存到: {output_file}")
+            return True
+        else:
+            print("所有JSON规则集下载失败，尝试处理文本规则集")
+    
+    # 处理文本规则集（原有逻辑）
+    if not txt_urls:
+        print("没有可处理的文本规则集")
+        return False
     
     # 创建临时目录
     temp_dir = f"temp/{ruleset_name}"
@@ -38,7 +118,7 @@ def process_ruleset(ruleset_name, urls):
 
     # 下载所有源文件
     temp_files = []
-    for i, url in enumerate(urls, start=1):
+    for i, url in enumerate(txt_urls, start=1):
         temp_file = f"{temp_dir}/file_{i}.txt"
         if download_file(url, temp_file):
             temp_files.append(temp_file)
@@ -70,7 +150,7 @@ def main():
 
     # 处理所有规则集
     for ruleset_name, urls in config['rulesets'].items():
-        if not process_ruleset(ruleset_name, urls):
+        if not process_ruleset(ruleset_name, urls, config['version']):
             print(f"规则集 {ruleset_name} 处理失败")
 
 if __name__ == "__main__":
