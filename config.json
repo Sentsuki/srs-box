@@ -17,6 +17,12 @@
         "telegram_ip": [
             "https://core.telegram.org/resources/cidr.txt"
         ],
+        "data_skype": [
+            "https://github.com/Sentsuki/srs-box/raw/refs/heads/main/data/Skype.json"
+        ],
+        "data_claude": [
+            "https://github.com/Sentsuki/srs-box/raw/refs/heads/main/data/claude.json"
+        ],
         "AWAvenue_Ads": [
             "https://github.com/TG-Twilight/AWAvenue-Ads-Rule/raw/refs/heads/main/Filters/AWAvenue-Ads-Rule-Singbox.json"
         ],
