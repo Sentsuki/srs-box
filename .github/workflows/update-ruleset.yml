@@ -1,4 +1,4 @@
-name: Update IP Rulesets
+name: Update Rulesets
 
 on:
   schedule:
@@ -57,4 +57,3 @@ jobs:
           git add -A
           git commit -m "update json"
           git push -f "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" json_release
-

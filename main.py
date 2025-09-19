@@ -35,7 +35,7 @@ def run_script(script_name):
 
 def main():
     """主函数"""
-    print("🌏 One-GeoIP 规则集生成器")
+    print("🌏 srs-box 规则集生成器")
     print("根据配置文件动态生成sing-box规则集")
     
     # 检查配置文件
