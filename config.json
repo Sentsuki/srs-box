@@ -14,10 +14,10 @@
             "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/unicom.txt",
             "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/unicom6.txt"
         ],
-        "AWAvenue_Ads": [
+        "telegram_ip": [
             "https://core.telegram.org/resources/cidr.txt"
         ],
-        "telegram_ip": [
+        "AWAvenue_Ads": [
             "https://github.com/TG-Twilight/AWAvenue-Ads-Rule/raw/refs/heads/main/Filters/AWAvenue-Ads-Rule-Singbox.json"
         ],
         "apple_api_domain": [
