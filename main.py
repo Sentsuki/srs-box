@@ -17,22 +17,20 @@ def load_config():
 def run_script(script_name):
     """运行Python脚本"""
     try:
-        print(f"\n{'='*50}")
-        print(f"运行脚本: {script_name}")
-        print(f"{'='*50}")
-        
-        result = subprocess.run([sys.executable, script_name], 
-                              capture_output=False, text=True)
+        script_path = os.path.join("src", script_name)
+        result = subprocess.run([sys.executable, script_path], 
+                              capture_output=True, text=True)
         
         if result.returncode != 0:
-            print(f"脚本 {script_name} 执行失败，返回码: {result.returncode}")
+            print(f"❌ 脚本 {script_name} 执行失败")
+            if result.stderr:
+                print(f"错误信息: {result.stderr}")
             return False
         
-        print(f"脚本 {script_name} 执行成功")
         return True
         
     except Exception as e:
-        print(f"运行脚本 {script_name} 时出错: {e}")
+        print(f"❌ 运行脚本 {script_name} 时出错: {e}")
         return False
 
 def main():
