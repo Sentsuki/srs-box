@@ -48,15 +48,42 @@ def download_json_ruleset(url):
         return None
 
 def merge_json_rulesets(json_rulesets, config_version):
-    """合并多个JSON规则集"""
-    merged_rules = []
+    """智能合并多个JSON规则集，将相同类型的规则合并在一起"""
+    # 用于存储合并后的规则，按规则类型分组
+    rule_groups = {}
     
     for json_data in json_rulesets:
+        rules = []
         if 'rules' in json_data and isinstance(json_data['rules'], list):
-            merged_rules.extend(json_data['rules'])
+            rules = json_data['rules']
         else:
             # 如果JSON结构不标准，尝试直接作为规则处理
-            merged_rules.append(json_data)
+            rules = [json_data]
+        
+        # 处理每个规则
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+                
+            # 遍历规则中的每个字段
+            for rule_type, rule_values in rule.items():
+                if not isinstance(rule_values, list):
+                    continue
+                    
+                # 如果这个规则类型还没有，创建新的列表
+                if rule_type not in rule_groups:
+                    rule_groups[rule_type] = []
+                
+                # 合并规则值，去重
+                for value in rule_values:
+                    if value not in rule_groups[rule_type]:
+                        rule_groups[rule_type].append(value)
+    
+    # 将分组的规则转换为最终格式
+    merged_rules = []
+    for rule_type, rule_values in rule_groups.items():
+        if rule_values:  # 只添加非空的规则
+            merged_rules.append({rule_type: rule_values})
     
     # 创建合并后的规则集
     merged_ruleset = {
@@ -95,7 +122,17 @@ def process_ruleset(ruleset_name, urls, config_version):
             else:
                 # 多个JSON文件，需要合并
                 merged_ruleset = merge_json_rulesets(json_rulesets, config_version)
+                
+                # 统计合并结果
+                rule_count = 0
+                rule_types = []
+                for rule in merged_ruleset.get('rules', []):
+                    for rule_type, rule_values in rule.items():
+                        rule_types.append(f"{rule_type}({len(rule_values)})")
+                        rule_count += len(rule_values)
+                
                 print(f"已合并 {len(json_rulesets)} 个JSON规则集")
+                print(f"合并结果: {', '.join(rule_types)}，总计 {rule_count} 条规则")
             
             # 保存合并后的规则集
             output_file = f"{ruleset_name}.json"
