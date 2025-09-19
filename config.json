@@ -25,11 +25,125 @@
             "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/no-cn-cdn-domain.list",
             "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/update-domain.list"
         ],
-        "test": [
-            "https://ruleset.skk.moe/sing-box/non_ip/stream_jp.json",
-            "https://ruleset.skk.moe/sing-box/non_ip/stream_kr.json",
-            "https://ruleset.skk.moe/sing-box/non_ip/stream_tw.json",
-            "https://ruleset.skk.moe/sing-box/non_ip/stream_us.json",
+        "apple_cdn": [
+            "https://ruleset.skk.moe/sing-box/domainset/apple_cdn.json",
+            "https://ruleset.skk.moe/sing-box/non_ip/apple_cdn.json"
+        ],
+        "cdn": [
+            "https://ruleset.skk.moe/sing-box/domainset/cdn.json",
+            "https://ruleset.skk.moe/sing-box/non_ip/cdn.json"
+        ],
+        "download": [
+            "https://ruleset.skk.moe/sing-box/domainset/download.json",
+            "https://ruleset.skk.moe/sing-box/non_ip/download.json"
+        ],
+        "game_download": [
+            "https://ruleset.skk.moe/sing-box/domainset/game-download.json"
+        ],
+        "icloud_private_relay": [
+            "https://ruleset.skk.moe/sing-box/domainset/icloud_private_relay.json"
+        ],
+        "reject": [
+            "https://ruleset.skk.moe/sing-box/domainset/reject.json",
+            "https://ruleset.skk.moe/sing-box/non_ip/reject.json"
+        ],
+        "reject_extra": [
+            "https://ruleset.skk.moe/sing-box/domainset/reject_extra.json"
+        ],
+        "speedtest": [
+            "https://ruleset.skk.moe/sing-box/domainset/speedtest.json"
+        ],
+        "ai": [
+            "https://ruleset.skk.moe/sing-box/non_ip/ai.json"
+        ],
+        "apple_cn": [
+            "https://ruleset.skk.moe/sing-box/non_ip/apple_cn.json"
+        ],
+        "apple_services": [
+            "https://ruleset.skk.moe/sing-box/non_ip/apple_services.json"
+        ],
+        "cloudmounter": [
+            "https://ruleset.skk.moe/sing-box/non_ip/cloudmounter.json"
+        ],
+        "direct": [
+            "https://ruleset.skk.moe/sing-box/non_ip/direct.json"
+        ],
+        "domestic": [
+            "https://ruleset.skk.moe/sing-box/non_ip/domestic.json"
+        ],
+        "gitlab": [
+            "https://ruleset.skk.moe/sing-box/non_ip/gitlab.json"
+        ],
+        "global": [
+            "https://ruleset.skk.moe/sing-box/non_ip/global.json"
+        ],
+        "lan": [
+            "https://ruleset.skk.moe/sing-box/non_ip/lan.json"
+        ],
+        "microsoft": [
+            "https://ruleset.skk.moe/sing-box/non_ip/microsoft.json"
+        ],
+        "microsoft_cdn": [
+            "https://ruleset.skk.moe/sing-box/non_ip/microsoft_cdn.json"
+        ],
+        "my_direct": [
+            "https://ruleset.skk.moe/sing-box/non_ip/my_direct.json"
+        ],
+        "my_git": [
+            "https://ruleset.skk.moe/sing-box/non_ip/my_git.json"
+        ],
+        "my_plus": [
+            "https://ruleset.skk.moe/sing-box/non_ip/my_plus.json"
+        ],
+        "my_proxy": [
+            "https://ruleset.skk.moe/sing-box/non_ip/my_proxy.json"
+        ],
+        "my_reject": [
+            "https://ruleset.skk.moe/sing-box/non_ip/my_reject.json"
+        ],
+        "my_us": [
+            "https://ruleset.skk.moe/sing-box/non_ip/my_us.json"
+        ],
+        "neteasemusic": [
+            "https://ruleset.skk.moe/sing-box/non_ip/neteasemusic.json"
+        ],
+        "reject_drop": [
+            "https://ruleset.skk.moe/sing-box/non_ip/reject-drop.json"
+        ],
+        "reject_no_drop": [
+            "https://ruleset.skk.moe/sing-box/non_ip/reject-no-drop.json"
+        ],
+        "reject_url_regex": [
+            "https://ruleset.skk.moe/sing-box/non_ip/reject-url-regex.json"
+        ],
+        "sogouinput": [
+            "https://ruleset.skk.moe/sing-box/non_ip/sogouinput.json"
+        ],
+        "stream": [
+            "https://ruleset.skk.moe/sing-box/non_ip/stream.json"
+        ],
+        "stream_biliintl": [
+            "https://ruleset.skk.moe/sing-box/non_ip/stream_biliintl.json"
+        ],
+        "stream_eu": [
+            "https://ruleset.skk.moe/sing-box/non_ip/stream_eu.json"
+        ],
+        "stream_hk": [
+            "https://ruleset.skk.moe/sing-box/non_ip/stream_hk.json"
+        ],
+        "stream_jp": [
+            "https://ruleset.skk.moe/sing-box/non_ip/stream_jp.json"
+        ],
+        "stream_kr": [
+            "https://ruleset.skk.moe/sing-box/non_ip/stream_kr.json"
+        ],
+        "stream_tw": [
+            "https://ruleset.skk.moe/sing-box/non_ip/stream_tw.json"
+        ],
+        "stream_us": [
+            "https://ruleset.skk.moe/sing-box/non_ip/stream_us.json"
+        ],
+        "telegram": [
             "https://ruleset.skk.moe/sing-box/non_ip/telegram.json"
         ]
     },
