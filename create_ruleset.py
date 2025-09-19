@@ -16,9 +16,14 @@ def create_ruleset_json(ruleset_name, config_version):
         txt_file = f"temp/{ruleset_name}.txt"
         json_file = f"{ruleset_name}.json"
         
+        # 检查JSON文件是否已经存在（由download_ip_lists.py生成）
+        if os.path.exists(json_file):
+            print(f"规则集JSON文件已存在: {json_file}（由JSON规则集生成）")
+            return True
+        
         # 检查txt文件是否存在
         if not os.path.exists(txt_file):
-            print(f"错误: {txt_file} 文件不存在")
+            print(f"错误: {txt_file} 文件不存在，且没有预生成的JSON文件")
             return False
         
         # 读取IP地址列表
