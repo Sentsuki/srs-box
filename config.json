@@ -16,6 +16,21 @@
         ],
         "telegram_ip": [
             "https://core.telegram.org/resources/cidr.txt"
+        ],
+        "apple": [
+            "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/api-domain.list",
+            "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/api-ip.list",
+            "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/cdn-domain.list",
+            "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/domain.list",
+            "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/no-cn-cdn-domain.list",
+            "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/update-domain.list"
+        ],
+        "test": [
+            "https://ruleset.skk.moe/sing-box/non_ip/stream_jp.json",
+            "https://ruleset.skk.moe/sing-box/non_ip/stream_kr.json",
+            "https://ruleset.skk.moe/sing-box/non_ip/stream_tw.json",
+            "https://ruleset.skk.moe/sing-box/non_ip/stream_us.json",
+            "https://ruleset.skk.moe/sing-box/non_ip/telegram.json"
         ]
     },
     "sing_box": {
