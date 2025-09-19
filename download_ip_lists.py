@@ -47,10 +47,25 @@ def download_json_ruleset(url):
         print(f"下载JSON规则集失败: {url}, 错误: {e}")
         return None
 
+def should_filter_rule_value(value):
+    """检查规则值是否应该被过滤掉"""
+    if not isinstance(value, str):
+        return False
+    
+    # 过滤包含 ruleset.skk.moe 的规则
+    filter_keywords = ['ruleset.skk.moe']
+    
+    for keyword in filter_keywords:
+        if keyword in value.lower():
+            return True
+    
+    return False
+
 def merge_json_rulesets(json_rulesets, config_version):
     """智能合并多个JSON规则集，将相同类型的规则合并在一起"""
     # 用于存储合并后的规则，按规则类型分组
     rule_groups = {}
+    filtered_count = 0
     
     for json_data in json_rulesets:
         rules = []
@@ -74,8 +89,14 @@ def merge_json_rulesets(json_rulesets, config_version):
                 if rule_type not in rule_groups:
                     rule_groups[rule_type] = []
                 
-                # 合并规则值，去重
+                # 合并规则值，去重并过滤
                 for value in rule_values:
+                    # 检查是否需要过滤
+                    if should_filter_rule_value(value):
+                        filtered_count += 1
+                        continue
+                    
+                    # 去重添加
                     if value not in rule_groups[rule_type]:
                         rule_groups[rule_type].append(value)
     
@@ -90,6 +111,10 @@ def merge_json_rulesets(json_rulesets, config_version):
         "version": config_version,
         "rules": merged_rules
     }
+    
+    # 如果有过滤的规则，显示统计信息
+    if filtered_count > 0:
+        print(f"已过滤 {filtered_count} 条包含 ruleset.skk.moe 的规则")
     
     return merged_ruleset
 
