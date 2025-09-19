@@ -37,89 +37,117 @@ def run_command(command):
         return False
 
 def get_ruleset_files():
-    """获取所有生成的规则集文件"""
+    """获取所有生成的规则集文件，分别返回JSON和SRS文件"""
     config = load_config()
     if not config:
-        return []
+        return [], []
     
-    files_to_add = []
+    json_files = []
+    srs_files = []
+    
     for ruleset_name, urls in config['rulesets'].items():
         json_file = f"{ruleset_name}.json"
         srs_file = f"{ruleset_name}.srs"
         
         if os.path.exists(json_file):
-            files_to_add.append(json_file)
-            print(f"找到文件: {json_file}")
+            json_files.append(json_file)
+            print(f"找到JSON文件: {json_file}")
         else:
             print(f"警告: {json_file} 文件不存在")
             
         if os.path.exists(srs_file):
-            files_to_add.append(srs_file)
-            print(f"找到文件: {srs_file}")
+            srs_files.append(srs_file)
+            print(f"找到SRS文件: {srs_file}")
         else:
             print(f"警告: {srs_file} 文件不存在")
     
-    return files_to_add
+    return json_files, srs_files
 
-def push_to_ruleset_branch():
-    """推送所有规则集文件到rule-set分支"""
+def push_files_to_branch(files, branch_name, file_type):
+    """推送指定文件到指定分支"""
+    if not files:
+        print(f"没有找到任何{file_type}文件，跳过{branch_name}分支推送")
+        return True
+    
+    try:
+        print(f"准备推送 {len(files)} 个{file_type}文件到{branch_name}分支: {', '.join(files)}")
+        
+        # 获取当前分支名
+        current_branch = subprocess.check_output("git rev-parse --abbrev-ref HEAD", shell=True).decode().strip()
+        print(f"当前分支: {current_branch}")
+        
+        # 检查分支是否存在
+        remote_branches = subprocess.check_output("git ls-remote --heads origin", shell=True).decode()
+        branch_exists = f"refs/heads/{branch_name}" in remote_branches
+        
+        if branch_exists:
+            # 如果分支存在，则删除它
+            print(f"正在删除现有的{branch_name}分支")
+            run_command(f"git push origin --delete {branch_name}")
+            # 等待一些时间确保分支被删除
+            time.sleep(2)
+        
+        # 创建并切换到新分支
+        print(f"创建{branch_name}分支")
+        run_command(f"git checkout --orphan {branch_name}")
+        
+        # 清除工作区
+        run_command("git rm -rf --cached .")
+        
+        # 添加指定类型的文件
+        print(f"添加{file_type}文件: {' '.join(files)}")
+        for file in files:
+            run_command(f"git add {file} -f")
+        
+        # 提交更改
+        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        commit_message = f"Update {file_type} rulesets - {current_time}"
+        run_command(f'git commit -m "{commit_message}"')
+        
+        # 推送到远程
+        print(f"推送到远程{branch_name}分支")
+        run_command(f"git push -u origin {branch_name}")
+        
+        # 切换回原分支
+        run_command(f"git checkout {current_branch}")
+                
+        print(f"成功推送{file_type}文件到{branch_name}分支")
+        return True
+        
+    except Exception as e:
+        print(f"推送{file_type}文件到{branch_name}分支时出错: {e}")
+        return False
+
+def push_to_separate_branches():
+    """推送JSON和SRS文件到不同的分支"""
     try:
         # 获取要推送的文件列表
-        files_to_add = get_ruleset_files()
+        json_files, srs_files = get_ruleset_files()
         
-        if not files_to_add:
+        if not json_files and not srs_files:
             print("错误: 没有找到任何规则集文件")
             return False
-        
-        print(f"准备推送 {len(files_to_add)} 个文件: {', '.join(files_to_add)}")
         
         # 配置Git
         print("配置Git")
         run_command('git config --global user.name "GitHub Actions"')
         run_command('git config --global user.email "actions@github.com"')
         
-        # 获取当前分支名
-        current_branch = subprocess.check_output("git rev-parse --abbrev-ref HEAD", shell=True).decode().strip()
-        print(f"当前分支: {current_branch}")
+        success = True
         
-        # 检查rule-set分支是否存在
-        remote_branches = subprocess.check_output("git ls-remote --heads origin", shell=True).decode()
-        branch_exists = "refs/heads/rule-set" in remote_branches
+        # 推送JSON文件到json-rules分支
+        if not push_files_to_branch(json_files, "json-rules", "JSON"):
+            success = False
         
-        if branch_exists:
-            # 如果分支存在，则删除它
-            print("正在删除现有的rule-set分支")
-            run_command("git push origin --delete rule-set")
-            # 等待一些时间确保分支被删除
-            time.sleep(2)
+        # 推送SRS文件到srs-rules分支  
+        if not push_files_to_branch(srs_files, "srs-rules", "SRS"):
+            success = False
         
-        # 创建并切换到新的rule-set分支
-        print("创建rule-set分支")
-        run_command("git checkout --orphan rule-set")
-        
-        # 清除工作区
-        run_command("git rm -rf --cached .")
-        
-        # 添加所有规则集文件
-        print(f"添加规则集文件: {' '.join(files_to_add)}")
-        for file in files_to_add:
-            run_command(f"git add {file} -f")
-        
-        # 提交更改
-        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        commit_message = f"Update IP rulesets - {current_time}"
-        run_command(f'git commit -m "{commit_message}"')
-        
-        # 推送到远程
-        print("推送到远程rule-set分支")
-        run_command("git push -u origin rule-set")
-                
-        print("成功推送到rule-set分支")
-        return True
+        return success
         
     except Exception as e:
-        print(f"推送到rule-set分支时出错: {e}")
+        print(f"推送文件时出错: {e}")
         return False
 
 if __name__ == "__main__":
-    push_to_ruleset_branch()
+    push_to_separate_branches()
