@@ -5,6 +5,7 @@
 """
 
 import os
+import time
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -79,6 +80,17 @@ class DownloadService:
         # 创建临时目录
         self.temp_dir = Path("temp")
         self.file_utils.ensure_dir(self.temp_dir)
+        
+        # 显示缓存信息
+        cache_info = self.network_utils.get_cache_info()
+        if cache_info['total_files'] > 0:
+            self.logger.info(f"💾 缓存状态: {cache_info['total_files']} 个文件, "
+                           f"{cache_info['total_size_mb']:.2f} MB")
+        
+        # 清理过期缓存
+        cleared = self.network_utils.clear_cache(older_than_hours=48)  # 清理48小时前的缓存
+        if cleared > 0:
+            self.logger.info(f"🧹 已清理 {cleared} 个过期缓存文件")
     
     def is_json_ruleset(self, url: str) -> bool:
         """
@@ -118,7 +130,7 @@ class DownloadService:
     
     def download_text_rulesets(self, urls: List[str], temp_dir: Path) -> List[str]:
         """
-        下载文本规则集列表
+        下载文本规则集列表，使用优化的并发下载
         
         Args:
             urls: 文本规则集URL列表
@@ -137,33 +149,60 @@ class DownloadService:
             output_path = temp_dir / filename
             download_tasks.append((url, output_path))
         
-        # 并发下载
-        self.logger.info(f"开始并发下载 {len(urls)} 个文本文件")
+        # 并发下载with enhanced progress and speed display
+        self.logger.info(f"🚀 开始并发下载 {len(urls)} 个文本文件 (并发数: {self.network_utils.max_concurrent})")
         
-        def progress_callback(completed: int, total: int, filename: str):
-            self.logger.progress(completed, total, f"下载: {filename}")
+        # 进度跟踪变量
+        last_progress_time = time.time()
         
-        results = self.network_utils.download_multiple(
+        def progress_callback(completed: int, total: int, current_file: str, speed_mbps: float, elapsed_time: float):
+            """增强的进度回调，显示速度和统计信息"""
+            current_time = time.time()
+            
+            # 限制进度更新频率（每0.5秒更新一次）
+            if current_time - last_progress_time >= 0.5 or completed == total:
+                nonlocal last_progress_time
+                last_progress_time = current_time
+                
+                # 构建进度消息
+                if speed_mbps > 0:
+                    speed_text = f"速度: {speed_mbps:.2f} MB/s"
+                else:
+                    speed_text = "计算速度中..."
+                
+                time_text = f"已用时: {elapsed_time:.1f}s"
+                progress_msg = f"{speed_text}, {time_text}"
+                
+                self.logger.progress(completed, total, progress_msg)
+        
+        # 使用增强的并发下载
+        results, stats = self.network_utils.download_multiple_with_stats(
             download_tasks, 
-            max_workers=5,
-            progress_callback=progress_callback
+            max_workers=self.network_utils.max_concurrent
         )
         
         # 收集成功下载的文件
         successful_files = []
-        failed_count = 0
+        failed_urls = []
         
         for result in results:
             if result.success:
                 successful_files.append(result.file_path)
             else:
-                failed_count += 1
+                failed_urls.append(result.url)
                 self.logger.warning(f"⚠️ 文件下载失败: {result.url} - {result.error}")
         
-        self.logger.success(f"✅ 文本文件下载完成: {len(successful_files)}/{len(urls)} 成功")
+        # 显示详细的下载统计
+        self.logger.success(f"✅ 文本文件下载完成: {stats['successful_files']}/{stats['total_files']} 成功")
+        self.logger.info(f"📊 下载统计:")
+        self.logger.info(f"   • 成功率: {stats['success_rate']:.1f}%")
+        self.logger.info(f"   • 总大小: {stats['total_size_mb']:.2f} MB")
+        self.logger.info(f"   • 总耗时: {stats['total_time_seconds']:.1f} 秒")
+        self.logger.info(f"   • 平均速度: {stats['average_speed_mbps']:.2f} MB/s")
+        self.logger.info(f"   • 并发数: {stats['max_concurrent']}")
         
-        if failed_count > 0:
-            self.logger.warning(f"⚠️ {failed_count} 个文件下载失败")
+        if stats['failed_files'] > 0:
+            self.logger.warning(f"⚠️ {stats['failed_files']} 个文件下载失败")
         
         return successful_files
     
