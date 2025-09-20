@@ -52,9 +52,9 @@ class Logger:
     LEVEL_PRIORITY = {
         LogLevel.DEBUG: 0,
         LogLevel.INFO: 1,
-        LogLevel.SUCCESS: 1,
-        LogLevel.WARNING: 2,
-        LogLevel.ERROR: 3,
+        LogLevel.SUCCESS: 2,
+        LogLevel.WARNING: 3,
+        LogLevel.ERROR: 4,
     }
     
     RESET = "\033[0m"  # 重置颜色
