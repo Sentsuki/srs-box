@@ -323,10 +323,11 @@ class RulesetGenerator:
                 self.logger.error(f"   {error}")
         
         # 最终状态
+        self.logger.info("")  # 添加空行分隔
         if self.summary.successful_compiles > 0:
-            self.logger.success(f"\n🎉 规则集生成完成！成功生成 {self.summary.successful_compiles} 个规则集")
+            self.logger.success(f"🎉 规则集生成完成！成功生成 {self.summary.successful_compiles} 个规则集")
         else:
-            self.logger.error(f"\n💥 规则集生成失败！没有成功生成任何规则集")
+            self.logger.error(f"💥 规则集生成失败！没有成功生成任何规则集")
     
     def _show_generated_files(self) -> None:
         """
