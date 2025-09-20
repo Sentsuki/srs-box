@@ -223,7 +223,11 @@ class ProcessorService:
         rule_groups: Dict[str, Set[str]] = {}
         
         # 流式处理每个JSON数据，避免同时在内存中保存所有数据
+        # 创建索引列表，避免在迭代时修改原列表
         for i, json_data in enumerate(json_data_list, 1):
+            if json_data is None:  # 跳过已清理的数据
+                continue
+                
             self.logger.info(f"🔄 合并JSON规则集 {i}/{len(json_data_list)}")
             
             try:
@@ -265,17 +269,21 @@ class ProcessorService:
                     if rule_index > 0 and rule_index % 100 == 0:
                         self.logger.info(f"   处理规则: {rule_index + 1}/{len(rules)}")
                 
-                # 清理已处理的JSON数据，释放内存
-                json_data_list[i - 1] = None
-                
             except Exception as e:
                 self.logger.warning(f"⚠️ 处理JSON规则集 {i} 时出错: {str(e)}")
                 continue
         
+        # 在处理完所有数据后清理列表
+        json_data_list.clear()
+        
         # 将分组的规则转换为最终格式，使用内存优化的方式
         merged_rules = []
         
-        for rule_type, rule_values in rule_groups.items():
+        # 创建规则类型列表的副本，避免在迭代时修改字典
+        rule_types_to_process = list(rule_groups.keys())
+        
+        for rule_type in rule_types_to_process:
+            rule_values = rule_groups[rule_type]
             if rule_values:  # 只添加非空的规则
                 self.logger.info(f"🔄 排序规则类型 {rule_type}: {len(rule_values)} 条规则")
                 
@@ -514,13 +522,22 @@ class ProcessorService:
             if memory_info_after['rss_mb'] > 0:
                 self.logger.info(f"💾 处理后内存使用: {memory_info_after['rss_mb']:.1f} MB")
             
+            # 获取输出目录配置
+            output_config = self.config_manager.get_output_config()
+            json_dir = output_config["json_dir"]
+            
+            # 确保输出目录存在
+            from pathlib import Path
+            json_path = Path(json_dir)
+            json_path.mkdir(parents=True, exist_ok=True)
+            
             # 保存处理后的规则集
-            output_file = f"{ruleset_name}.json"
-            self.file_utils.write_json_file(output_file, ruleset_data)
+            output_file = json_path / f"{ruleset_name}.json"
+            self.file_utils.write_json_file(str(output_file), ruleset_data)
             
             processed_data.set_success(
                 ruleset_data, 
-                output_file, 
+                str(output_file), 
                 rule_count, 
                 rule_types, 
                 filtered_count

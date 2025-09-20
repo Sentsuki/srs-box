@@ -52,9 +52,23 @@ class RulesetGenerator:
         """
         self.config_path = config_path
         
-        # 初始化工具类
-        self.logger = Logger()
+        # 初始化配置管理器
         self.config_manager = ConfigManager(config_path)
+        
+        # 加载配置并初始化日志系统
+        config = self.config_manager.load_config()
+        logging_config = self.config_manager.get_logging_config()
+        
+        # 初始化日志系统
+        from .utils.logger import LogLevel
+        log_level = LogLevel.from_string(logging_config.get("level", "INFO"))
+        self.logger = Logger(
+            enable_color=logging_config.get("enable_color", True),
+            log_level=log_level,
+            show_progress=logging_config.get("show_progress", True)
+        )
+        
+        # 初始化其他工具类
         self.file_utils = FileUtils()
         self.network_utils = NetworkUtils()
         
@@ -320,24 +334,29 @@ class RulesetGenerator:
         """
         self.logger.info(f"\n📁 生成的文件:")
         
+        # 获取输出目录配置
+        output_config = self.config_manager.get_output_config()
+        json_dir = output_config["json_dir"]
+        srs_dir = output_config["srs_dir"]
+        
         # 检查所有可能的输出文件
         rulesets = self.config_manager.get_rulesets()
         
         for ruleset_name in rulesets.keys():
-            json_file = f"{ruleset_name}.json"
-            srs_file = f"{ruleset_name}.srs"
+            json_file = Path(json_dir) / f"{ruleset_name}.json"
+            srs_file = Path(srs_dir) / f"{ruleset_name}.srs"
             
             # 检查JSON文件
-            if os.path.exists(json_file):
-                size = os.path.getsize(json_file)
+            if json_file.exists():
+                size = json_file.stat().st_size
                 formatted_size = self.file_utils.format_file_size(size)
                 self.logger.info(f"   ✓ {json_file} ({formatted_size})")
             else:
                 self.logger.info(f"   ✗ {json_file} (未找到)")
             
             # 检查SRS文件
-            if os.path.exists(srs_file):
-                size = os.path.getsize(srs_file)
+            if srs_file.exists():
+                size = srs_file.stat().st_size
                 formatted_size = self.file_utils.format_file_size(size)
                 self.logger.info(f"   ✓ {srs_file} ({formatted_size})")
             else:

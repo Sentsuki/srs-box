@@ -187,3 +187,4 @@ ai
 .DS_Store
 Thumbs.db
 .kiro/
+output/

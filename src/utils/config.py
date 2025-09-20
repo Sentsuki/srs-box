@@ -98,6 +98,18 @@ class ConfigManager:
         version = self._config.get("version")
         if not isinstance(version, int):
             raise ValueError("version 字段必须是整数")
+        
+        # 验证可选的 logging 字段
+        if "logging" in self._config:
+            logging_config = self._config["logging"]
+            if not isinstance(logging_config, dict):
+                raise ValueError("logging 字段必须是对象")
+        
+        # 验证可选的 output 字段
+        if "output" in self._config:
+            output_config = self._config["output"]
+            if not isinstance(output_config, dict):
+                raise ValueError("output 字段必须是对象")
     
     def get_rulesets(self) -> Dict[str, List[str]]:
         """
@@ -176,3 +188,48 @@ class ConfigManager:
             sing-box 平台字符串
         """
         return self.get_sing_box_config()["platform"]
+    
+    def get_logging_config(self) -> Dict[str, Any]:
+        """
+        获取日志配置
+        
+        Returns:
+            日志配置字典，包含默认值
+        """
+        if self._config is None:
+            self.load_config()
+        
+        # 默认日志配置
+        default_logging = {
+            "level": "INFO",
+            "enable_color": True,
+            "show_progress": True
+        }
+        
+        # 合并用户配置
+        user_logging = self._config.get("logging", {})
+        default_logging.update(user_logging)
+        
+        return default_logging
+    
+    def get_output_config(self) -> Dict[str, str]:
+        """
+        获取输出配置
+        
+        Returns:
+            输出配置字典，包含默认值
+        """
+        if self._config is None:
+            self.load_config()
+        
+        # 默认输出配置
+        default_output = {
+            "json_dir": "output/json",
+            "srs_dir": "output/srs"
+        }
+        
+        # 合并用户配置
+        user_output = self._config.get("output", {})
+        default_output.update(user_output)
+        
+        return default_output

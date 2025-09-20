@@ -35,140 +35,23 @@
         "apple_cdn_domain": [
             "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/cdn-domain.list"
         ],
-        "apple_domain": [
-            "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/domain.list"
-        ],
-        "apple_no_cn_cdn_domain": [
-            "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/no-cn-cdn-domain.list"
-        ],
-        "apple_update_domain": [
-            "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/update-domain.list"
-        ],
         "skk_apple_cdn": [
             "https://ruleset.skk.moe/sing-box/domainset/apple_cdn.json",
             "https://ruleset.skk.moe/sing-box/non_ip/apple_cdn.json"
-        ],
-        "skk_cdn": [
-            "https://ruleset.skk.moe/sing-box/domainset/cdn.json",
-            "https://ruleset.skk.moe/sing-box/non_ip/cdn.json"
-        ],
-        "skk_download": [
-            "https://ruleset.skk.moe/sing-box/domainset/download.json",
-            "https://ruleset.skk.moe/sing-box/non_ip/download.json"
-        ],
-        "skk_game_download": [
-            "https://ruleset.skk.moe/sing-box/domainset/game-download.json"
-        ],
-        "skk_icloud_private_relay": [
-            "https://ruleset.skk.moe/sing-box/domainset/icloud_private_relay.json"
-        ],
-        "skk_reject": [
-            "https://ruleset.skk.moe/sing-box/domainset/reject.json",
-            "https://ruleset.skk.moe/sing-box/non_ip/reject.json"
-        ],
-        "skk_reject_extra": [
-            "https://ruleset.skk.moe/sing-box/domainset/reject_extra.json"
-        ],
-        "skk_speedtest": [
-            "https://ruleset.skk.moe/sing-box/domainset/speedtest.json"
-        ],
-        "skk_ai": [
-            "https://ruleset.skk.moe/sing-box/non_ip/ai.json"
-        ],
-        "skk_apple_cn": [
-            "https://ruleset.skk.moe/sing-box/non_ip/apple_cn.json"
-        ],
-        "skk_apple_services": [
-            "https://ruleset.skk.moe/sing-box/non_ip/apple_services.json"
-        ],
-        "skk_cloudmounter": [
-            "https://ruleset.skk.moe/sing-box/non_ip/cloudmounter.json"
-        ],
-        "skk_direct": [
-            "https://ruleset.skk.moe/sing-box/non_ip/direct.json"
-        ],
-        "skk_domestic": [
-            "https://ruleset.skk.moe/sing-box/non_ip/domestic.json"
-        ],
-        "skk_gitlab": [
-            "https://ruleset.skk.moe/sing-box/non_ip/gitlab.json"
-        ],
-        "skk_global": [
-            "https://ruleset.skk.moe/sing-box/non_ip/global.json"
-        ],
-        "skk_lan": [
-            "https://ruleset.skk.moe/sing-box/non_ip/lan.json"
-        ],
-        "skk_microsoft": [
-            "https://ruleset.skk.moe/sing-box/non_ip/microsoft.json"
-        ],
-        "skk_microsoft_cdn": [
-            "https://ruleset.skk.moe/sing-box/non_ip/microsoft_cdn.json"
-        ],
-        "skk_my_direct": [
-            "https://ruleset.skk.moe/sing-box/non_ip/my_direct.json"
-        ],
-        "skk_my_git": [
-            "https://ruleset.skk.moe/sing-box/non_ip/my_git.json"
-        ],
-        "skk_my_plus": [
-            "https://ruleset.skk.moe/sing-box/non_ip/my_plus.json"
-        ],
-        "skk_my_proxy": [
-            "https://ruleset.skk.moe/sing-box/non_ip/my_proxy.json"
-        ],
-        "skk_my_reject": [
-            "https://ruleset.skk.moe/sing-box/non_ip/my_reject.json"
-        ],
-        "skk_my_us": [
-            "https://ruleset.skk.moe/sing-box/non_ip/my_us.json"
-        ],
-        "skk_neteasemusic": [
-            "https://ruleset.skk.moe/sing-box/non_ip/neteasemusic.json"
-        ],
-        "skk_reject_drop": [
-            "https://ruleset.skk.moe/sing-box/non_ip/reject-drop.json"
-        ],
-        "skk_reject_no_drop": [
-            "https://ruleset.skk.moe/sing-box/non_ip/reject-no-drop.json"
-        ],
-        "skk_reject_url_regex": [
-            "https://ruleset.skk.moe/sing-box/non_ip/reject-url-regex.json"
-        ],
-        "skk_sogouinput": [
-            "https://ruleset.skk.moe/sing-box/non_ip/sogouinput.json"
-        ],
-        "skk_stream": [
-            "https://ruleset.skk.moe/sing-box/non_ip/stream.json"
-        ],
-        "skk_stream_biliintl": [
-            "https://ruleset.skk.moe/sing-box/non_ip/stream_biliintl.json"
-        ],
-        "skk_stream_eu": [
-            "https://ruleset.skk.moe/sing-box/non_ip/stream_eu.json"
-        ],
-        "skk_stream_hk": [
-            "https://ruleset.skk.moe/sing-box/non_ip/stream_hk.json"
-        ],
-        "skk_stream_jp": [
-            "https://ruleset.skk.moe/sing-box/non_ip/stream_jp.json"
-        ],
-        "skk_stream_kr": [
-            "https://ruleset.skk.moe/sing-box/non_ip/stream_kr.json"
-        ],
-        "skk_stream_tw": [
-            "https://ruleset.skk.moe/sing-box/non_ip/stream_tw.json"
-        ],
-        "skk_stream_us": [
-            "https://ruleset.skk.moe/sing-box/non_ip/stream_us.json"
-        ],
-        "skk_telegram": [
-            "https://ruleset.skk.moe/sing-box/non_ip/telegram.json"
         ]
     },
     "sing_box": {
         "version": "1.12.8",
-        "platform": "linux-amd64"
+        "platform": "windows-amd64"
+    },
+    "logging": {
+        "level": "SUCCESS",
+        "enable_color": true,
+        "show_progress": true
+    },
+    "output": {
+        "json_dir": "output/json",
+        "srs_dir": "output/srs"
     },
     "version": 3
 }

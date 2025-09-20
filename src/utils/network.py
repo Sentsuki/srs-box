@@ -733,7 +733,9 @@ class NetworkUtils:
             是否为 JSON URL
         """
         url_lower = url.lower()
+        # .list 文件实际上是标准的 JSON 格式
         return (url_lower.endswith('.json') or 
+                url_lower.endswith('.list') or
                 'json' in url_lower or
                 url_lower.endswith('.jsonl'))
     
@@ -749,5 +751,6 @@ class NetworkUtils:
             是否为文本 URL
         """
         url_lower = url.lower()
-        text_extensions = ['.txt', '.list', '.conf', '.cfg', '.ini']
+        # 移除 .list，因为它实际上是 JSON 格式
+        text_extensions = ['.txt', '.conf', '.cfg', '.ini']
         return any(url_lower.endswith(ext) for ext in text_extensions)

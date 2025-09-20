@@ -203,11 +203,19 @@ class CompilerService:
             if not self.sing_box_binary:
                 raise Exception("sing-box未设置，请先调用setup_sing_box()")
             
-            # 构建输出文件路径
-            output_file = f"{ruleset_name}.srs"
+            # 获取输出目录配置
+            output_config = self.config_manager.get_output_config()
+            srs_dir = output_config["srs_dir"]
             
-            # 构建编译命令
-            cmd = [f"./{self.sing_box_binary}", "rule-set", "compile", input_file]
+            # 确保输出目录存在
+            srs_path = Path(srs_dir)
+            srs_path.mkdir(parents=True, exist_ok=True)
+            
+            # 构建输出文件路径
+            output_file = srs_path / f"{ruleset_name}.srs"
+            
+            # 构建编译命令，指定输出文件
+            cmd = [f"./{self.sing_box_binary}", "rule-set", "compile", input_file, "--output", str(output_file)]
             
             self.logger.info(f"🔨 编译规则集: {ruleset_name}")
             self.logger.info(f"📄 输入文件: {input_file}")
@@ -236,7 +244,7 @@ class CompilerService:
             file_size = self.file_utils.get_file_size(output_path)
             formatted_size = self.file_utils.format_file_size(file_size)
             
-            result.set_success(input_file, output_file, file_size)
+            result.set_success(input_file, str(output_file), file_size)
             
             self.logger.success(f"✅ 规则集编译成功: {output_file} ({formatted_size})")
             
