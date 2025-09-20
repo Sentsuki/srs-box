@@ -321,7 +321,7 @@ class ProcessorService:
             "rules": merged_rules
         }
         
-        self.logger.success(f"✅ JSON规则集合并完成，共 {len(merged_rules)} 种规则类型")
+        self.logger.info(f"✅ JSON规则集合并完成，共 {len(merged_rules)} 种规则类型")
         
         return merged_ruleset
     
@@ -415,7 +415,7 @@ class ProcessorService:
             ]
         }
         
-        self.logger.success(f"✅ IP规则集创建完成，共 {len(ip_list)} 条规则")
+        self.logger.info(f"✅ IP规则集创建完成，共 {len(ip_list)} 条规则")
         
         return ruleset
     
@@ -471,7 +471,7 @@ class ProcessorService:
                     del original_rules  # 显式删除原始规则，释放内存
                     
                     if filtered_count > 0:
-                        self.logger.success(f"🚫 已过滤 {filtered_count} 条包含过滤关键字的规则")
+                        self.logger.info(f"🚫 已过滤 {filtered_count} 条包含过滤关键字的规则")
                 else:
                     filtered_count = 0
                 
