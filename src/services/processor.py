@@ -471,7 +471,7 @@ class ProcessorService:
                     del original_rules  # 显式删除原始规则，释放内存
                     
                     if filtered_count > 0:
-                        self.logger.info(f"🚫 已过滤 {filtered_count} 条包含过滤关键字的规则")
+                        self.logger.success(f"🚫 已过滤 {filtered_count} 条包含过滤关键字的规则")
                 else:
                     filtered_count = 0
                 
@@ -485,7 +485,7 @@ class ProcessorService:
                             rule_types.append(f"{rule_type}({len(rule_values)})")
                             rule_count += len(rule_values)
                 
-                self.logger.success(f"✅ JSON规则集处理完成")
+                self.logger.info(f"✅ JSON规则集处理完成")
                 self.logger.info(f"📊 规则统计: {', '.join(rule_types)}，总计 {rule_count} 条规则")
                 
             elif downloaded_data.has_text_files():
@@ -511,7 +511,7 @@ class ProcessorService:
                             rule_types.append(f"{rule_type}({len(rule_values)})")
                             rule_count += len(rule_values)
                 
-                self.logger.success(f"✅ 文本规则集处理完成")
+                self.logger.info(f"✅ 文本规则集处理完成")
                 self.logger.info(f"📊 规则统计: {', '.join(rule_types)}，总计 {rule_count} 条规则")
                 
             else:

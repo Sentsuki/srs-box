@@ -122,7 +122,7 @@ class DownloadService:
             json_data = self.network_utils.download_json(url)
             if json_data:
                 json_data_list.append(json_data)
-                self.logger.success(f"✅ JSON规则集下载成功")
+                self.logger.info(f"✅ JSON规则集下载成功")
             else:
                 self.logger.warning(f"⚠️ JSON规则集下载失败: {url}")
         
@@ -193,7 +193,7 @@ class DownloadService:
                 self.logger.warning(f"⚠️ 文件下载失败: {result.url} - {result.error}")
         
         # 显示详细的下载统计
-        self.logger.success(f"✅ 文本文件下载完成: {stats['successful_files']}/{stats['total_files']} 成功")
+        self.logger.info(f"✅ 文本文件下载完成: {stats['successful_files']}/{stats['total_files']} 成功")
         self.logger.info(f"📊 下载统计:")
         self.logger.info(f"   • 成功率: {stats['success_rate']:.1f}%")
         self.logger.info(f"   • 总大小: {stats['total_size_mb']:.2f} MB")
