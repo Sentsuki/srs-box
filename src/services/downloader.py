@@ -157,11 +157,11 @@ class DownloadService:
         
         def progress_callback(completed: int, total: int, current_file: str, speed_mbps: float, elapsed_time: float):
             """增强的进度回调，显示速度和统计信息"""
+            nonlocal last_progress_time
             current_time = time.time()
             
             # 限制进度更新频率（每0.5秒更新一次）
             if current_time - last_progress_time >= 0.5 or completed == total:
-                nonlocal last_progress_time
                 last_progress_time = current_time
                 
                 # 构建进度消息
