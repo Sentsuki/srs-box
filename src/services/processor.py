@@ -447,9 +447,11 @@ class ProcessorService:
                 self.logger.info(f"📄 处理JSON规则集数据: {len(downloaded_data.json_data)} 个")
                 
                 if len(downloaded_data.json_data) == 1:
-                    # 只有一个JSON文件，直接使用
+                    # 只有一个JSON文件，使用并覆盖版本号
                     ruleset_data = downloaded_data.json_data[0]
-                    self.logger.info("📋 使用单个JSON规则集")
+                    # 确保使用配置文件中指定的版本号
+                    ruleset_data["version"] = config_version
+                    self.logger.info("📋 使用单个JSON规则集并覆盖版本号")
                 else:
                     # 多个JSON文件，需要合并
                     self.logger.info(f"🔀 合并 {len(downloaded_data.json_data)} 个JSON规则集")
