@@ -1,82 +1,40 @@
 #!/usr/bin/env python3
 
-import json
+"""
+srs-box 规则集生成器主程序
+使用重构后的应用架构，提供统一的错误处理和日志输出
+"""
+
 import sys
-import subprocess
-import os
+from pathlib import Path
 
-def load_config():
-    """加载配置文件"""
-    try:
-        with open("config.json", 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"加载配置文件失败: {e}")
-        return None
+# 添加src目录到Python路径
+src_path = Path(__file__).parent / "src"
+sys.path.insert(0, str(src_path))
 
-def run_script(script_name):
-    """运行Python脚本"""
-    try:
-        script_path = os.path.join("src", script_name)
-        result = subprocess.run([sys.executable, script_path], 
-                              capture_output=True, text=True)
-        
-        if result.returncode != 0:
-            print(f"❌ 脚本 {script_name} 执行失败")
-            if result.stderr:
-                print(f"错误信息: {result.stderr}")
-            return False
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ 运行脚本 {script_name} 时出错: {e}")
-        return False
+from src.app import RulesetGenerator
+
 
 def main():
     """主函数"""
-    print("🌏 srs-box 规则集生成器")
-    print("根据配置文件动态生成sing-box规则集")
-    
-    # 检查配置文件
-    config = load_config()
-    if not config:
-        print("❌ 配置文件加载失败，程序退出")
-        return
-    
-    print(f"\n📋 配置信息:")
-    print(f"   规则集数量: {len(config['rulesets'])}")
-    print(f"   sing-box版本: {config['sing_box']['version']}")
-    print(f"   平台: {config['sing_box']['platform']}")
-    
-    for name, urls in config['rulesets'].items():
-        print(f"   - {name}: {len(urls)} 个数据源")
-    
-    # 执行步骤
-    steps = [
-        ("下载IP列表", "download_ip_lists.py"),
-        ("创建规则集JSON", "create_ruleset.py"),
-        ("下载并编译规则集", "download_and_compile.py")
-    ]
-    
-    for step_name, script_name in steps:
-        print(f"\n🚀 步骤: {step_name}")
-        if not run_script(script_name):
-            print(f"❌ 步骤失败: {step_name}")
-            return
-    
-    print(f"\n✅ 所有步骤完成！")
-    
-    # 显示生成的文件
-    print(f"\n📁 生成的文件:")
-    for name, urls in config['rulesets'].items():
-        files = [f"{name}.json", f"{name}.srs"]
-        for file in files:
-            if os.path.exists(file):
-                size = os.path.getsize(file)
-                print(f"   ✓ {file} ({size:,} bytes)")
-            else:
-                print(f"   ✗ {file} (未找到)")
+    try:
+        # 创建规则集生成器实例
+        generator = RulesetGenerator()
+        
+        # 运行完整流程
+        success = generator.run()
+        
+        # 根据执行结果设置退出码
+        sys.exit(0 if success else 1)
+        
+    except KeyboardInterrupt:
+        print("\n⚠️ 用户中断执行")
+        sys.exit(130)  # 标准的键盘中断退出码
+        
+    except Exception as e:
+        print(f"❌ 程序执行异常: {str(e)}")
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
