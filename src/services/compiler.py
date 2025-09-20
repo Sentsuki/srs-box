@@ -118,7 +118,7 @@ class CompilerService:
             if os.name != 'nt':  # 不是Windows
                 os.chmod(target_binary, 0o755)
             
-            self.logger.success(f"✅ sing-box已准备就绪: {target_binary}")
+            self.logger.info(f"✅ sing-box已准备就绪: {target_binary}")
             return str(target_binary)
             
         except Exception as e:
@@ -246,7 +246,7 @@ class CompilerService:
             
             result.set_success(input_file, str(output_file), file_size)
             
-            self.logger.success(f"✅ 规则集编译成功: {output_file} ({formatted_size})")
+            self.logger.info(f"✅ 规则集编译成功: {output_file} ({formatted_size})")
             
         except subprocess.TimeoutExpired:
             result.set_error("编译超时")

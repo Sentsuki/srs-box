@@ -545,7 +545,7 @@ class ProcessorService:
                 filtered_count
             )
             
-            self.logger.success(f"✅ 规则集已保存到: {output_file}")
+            self.logger.info(f"✅ 规则集已保存到: {output_file}")
             
             # 清理临时数据
             self.cleanup_temporary_data()
