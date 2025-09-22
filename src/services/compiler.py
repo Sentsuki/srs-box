@@ -298,11 +298,11 @@ class CompilerService:
             
         except Exception as e:
             self.logger.error(f"❌ sing-box设置失败: {str(e)}")
-            # 为所有规则集创建失败结果
-            for ruleset_name in successful_processed.keys():
-                failed_result = CompileResult(ruleset_name)
+            # 为所有任务创建失败结果
+            for task_name in compile_tasks.keys():
+                failed_result = CompileResult(task_name)
                 failed_result.set_error(f"sing-box设置失败: {str(e)}")
-                results[ruleset_name] = failed_result
+                results[task_name] = failed_result
             return results
         
         self.logger.info(f"📋 需要编译 {len(compile_tasks)} 个JSON文件")
@@ -331,7 +331,7 @@ class CompilerService:
         formatted_total_size = self.file_utils.format_file_size(total_size)
         
         self.logger.separator("编译阶段完成")
-        self.logger.success(f"✅ 编译完成: {successful_compiled}/{len(successful_processed)} 个规则集成功")
+        self.logger.success(f"✅ 编译完成: {successful_compiled}/{len(compile_tasks)} 个文件成功")
         
         if successful_compiled > 0:
             self.logger.info(f"📊 总输出大小: {formatted_total_size}")
