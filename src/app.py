@@ -16,6 +16,7 @@ from .utils.file_utils import FileUtils
 from .services.downloader import DownloadService, DownloadedData
 from .services.processor import ProcessorService, ProcessedData
 from .services.compiler import CompilerService, CompileResult
+from .services.converter import ConverterService, ConvertedData
 
 
 class ExecutionSummary:
@@ -82,11 +83,15 @@ class RulesetGenerator:
         self.compiler_service = CompilerService(
             self.config_manager, self.logger, self.network_utils, self.file_utils
         )
+        self.converter_service = ConverterService(
+            self.config_manager, self.logger, self.network_utils, self.file_utils
+        )
         
         # 执行结果存储
         self.download_results: Dict[str, DownloadedData] = {}
         self.process_results: Dict[str, ProcessedData] = {}
         self.compile_results: Dict[str, CompileResult] = {}
+        self.convert_results: Dict[str, ConvertedData] = {}
         
         # 执行摘要
         self.summary = ExecutionSummary()
@@ -230,8 +235,10 @@ class RulesetGenerator:
         try:
             self.logger.separator("开始编译阶段")
             
-            # 执行编译
-            self.compile_results = self.compiler_service.compile_all_rulesets(self.process_results)
+            # 执行编译（包括rulesets处理的和convert转换的JSON文件）
+            self.compile_results = self.compiler_service.compile_all_rulesets(
+                self.process_results, self.convert_results
+            )
             
             # 统计结果
             successful_compiles = sum(
@@ -267,6 +274,52 @@ class RulesetGenerator:
         except Exception as e:
             self.logger.error(f"❌ 编译阶段异常: {str(e)}")
             self.summary.add_error(f"编译阶段异常: {str(e)}")
+            return False
+    
+    def convert_phase(self) -> bool:
+        """
+        执行转换阶段
+        
+        Returns:
+            是否有成功的转换
+        """
+        try:
+            self.logger.separator("开始转换阶段")
+            
+            # 执行转换
+            self.convert_results = self.converter_service.convert_all_rulesets()
+            
+            # 如果没有convert配置，跳过此阶段
+            if not self.convert_results:
+                self.logger.info("📋 没有convert配置，跳过转换阶段")
+                return True  # 没有convert配置不算失败
+            
+            # 统计结果
+            successful_converts = sum(
+                1 for data in self.convert_results.values() if data.is_successful()
+            )
+            
+            if successful_converts == 0:
+                self.logger.error("❌ 没有成功转换任何规则集")
+                self.summary.add_error("没有成功转换任何规则集")
+                return False
+            
+            # 记录失败的转换
+            failed_converts = []
+            for name, data in self.convert_results.items():
+                if not data.is_successful():
+                    failed_converts.append(name)
+                    for error in data.errors:
+                        self.summary.add_warning(f"转换规则集 {name}: {error}")
+            
+            if failed_converts:
+                self.summary.add_warning(f"部分转换规则集失败: {', '.join(failed_converts)}")
+            
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"❌ 转换阶段异常: {str(e)}")
+            self.summary.add_error(f"转换阶段异常: {str(e)}")
             return False
     
     def cleanup_phase(self) -> None:
@@ -307,6 +360,13 @@ class RulesetGenerator:
         if self.summary.total_output_size > 0:
             formatted_size = self.file_utils.format_file_size(self.summary.total_output_size)
             self.logger.info(f"   输出文件总大小: {formatted_size}")
+        
+        # 显示转换统计
+        if self.convert_results:
+            convert_stats = self.get_convert_statistics()
+            self.logger.info(f"   转换规则集: {convert_stats['successful_converts']}/{convert_stats['total_converts']}")
+            self.logger.info(f"   转换链接: {convert_stats['successful_links']}/{convert_stats['total_links']}")
+            self.logger.info(f"   生成JSON文件: {convert_stats['total_json_files']}")
         
         # 显示生成的文件
         self._show_generated_files()
@@ -362,6 +422,28 @@ class RulesetGenerator:
                 self.logger.info(f"   ✓ {srs_file} ({formatted_size})")
             else:
                 self.logger.info(f"   ✗ {srs_file} (未找到)")
+        
+        # 检查转换生成的文件
+        if self.convert_results:
+            self.logger.info(f"\n📁 转换生成的JSON文件:")
+            for convert_name, convert_data in self.convert_results.items():
+                if convert_data.is_successful():
+                    self.logger.info(f"   📂 {convert_name}:")
+                    for json_file in convert_data.json_files:
+                        if Path(json_file).exists():
+                            size = Path(json_file).stat().st_size
+                            formatted_size = self.file_utils.format_file_size(size)
+                            self.logger.info(f"     ✓ {json_file} ({formatted_size})")
+        
+        # 检查所有编译生成的SRS文件
+        if self.compile_results:
+            self.logger.info(f"\n📁 编译生成的SRS文件:")
+            for task_name, compile_result in self.compile_results.items():
+                if compile_result.success and compile_result.output_file:
+                    if Path(compile_result.output_file).exists():
+                        size = Path(compile_result.output_file).stat().st_size
+                        formatted_size = self.file_utils.format_file_size(size)
+                        self.logger.info(f"   ✓ {compile_result.output_file} ({formatted_size})")
     
     def run(self) -> bool:
         """
@@ -389,14 +471,18 @@ class RulesetGenerator:
             if not self.process_phase():
                 return False
             
-            # 4. 编译阶段
+            # 4. 转换阶段
+            if not self.convert_phase():
+                return False
+            
+            # 5. 编译阶段
             if not self.compile_phase():
                 return False
             
-            # 5. 清理阶段
+            # 6. 清理阶段
             self.cleanup_phase()
             
-            # 6. 显示摘要
+            # 7. 显示摘要
             self.show_summary()
             
             # 判断整体是否成功
@@ -447,3 +533,12 @@ class RulesetGenerator:
             编译统计字典
         """
         return self.compiler_service.get_compile_statistics(self.compile_results)
+    
+    def get_convert_statistics(self) -> Dict[str, Any]:
+        """
+        获取转换统计信息
+        
+        Returns:
+            转换统计字典
+        """
+        return self.converter_service.get_convert_statistics(self.convert_results)

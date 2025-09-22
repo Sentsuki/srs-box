@@ -166,6 +166,11 @@
       "https://ruleset.skk.moe/sing-box/non_ip/telegram.json"
     ]
   },
+  "convert": {
+    "test": [
+      "https://raw.githubusercontent.com/VirgilClyne/GetSomeFries/main/ruleset/HTTPDNS.Block.yaml"
+    ]
+  },
   "sing_box": {
     "version": "1.12.8",
     "platform": "linux-amd64"
