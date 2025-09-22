@@ -235,8 +235,10 @@ class RulesetGenerator:
         try:
             self.logger.separator("开始编译阶段")
             
-            # 执行编译
-            self.compile_results = self.compiler_service.compile_all_rulesets(self.process_results)
+            # 执行编译（包括rulesets处理的和convert转换的JSON文件）
+            self.compile_results = self.compiler_service.compile_all_rulesets(
+                self.process_results, self.convert_results
+            )
             
             # 统计结果
             successful_compiles = sum(
@@ -365,7 +367,6 @@ class RulesetGenerator:
             self.logger.info(f"   转换规则集: {convert_stats['successful_converts']}/{convert_stats['total_converts']}")
             self.logger.info(f"   转换链接: {convert_stats['successful_links']}/{convert_stats['total_links']}")
             self.logger.info(f"   生成JSON文件: {convert_stats['total_json_files']}")
-            self.logger.info(f"   生成SRS文件: {convert_stats['total_srs_files']}")
         
         # 显示生成的文件
         self._show_generated_files()
@@ -424,7 +425,7 @@ class RulesetGenerator:
         
         # 检查转换生成的文件
         if self.convert_results:
-            self.logger.info(f"\n📁 转换生成的文件:")
+            self.logger.info(f"\n📁 转换生成的JSON文件:")
             for convert_name, convert_data in self.convert_results.items():
                 if convert_data.is_successful():
                     self.logger.info(f"   📂 {convert_name}:")
@@ -433,11 +434,16 @@ class RulesetGenerator:
                             size = Path(json_file).stat().st_size
                             formatted_size = self.file_utils.format_file_size(size)
                             self.logger.info(f"     ✓ {json_file} ({formatted_size})")
-                    for srs_file in convert_data.srs_files:
-                        if srs_file and Path(srs_file).exists():
-                            size = Path(srs_file).stat().st_size
-                            formatted_size = self.file_utils.format_file_size(size)
-                            self.logger.info(f"     ✓ {srs_file} ({formatted_size})")
+        
+        # 检查所有编译生成的SRS文件
+        if self.compile_results:
+            self.logger.info(f"\n📁 编译生成的SRS文件:")
+            for task_name, compile_result in self.compile_results.items():
+                if compile_result.success and compile_result.output_file:
+                    if Path(compile_result.output_file).exists():
+                        size = Path(compile_result.output_file).stat().st_size
+                        formatted_size = self.file_utils.format_file_size(size)
+                        self.logger.info(f"   ✓ {compile_result.output_file} ({formatted_size})")
     
     def run(self) -> bool:
         """
@@ -465,12 +471,12 @@ class RulesetGenerator:
             if not self.process_phase():
                 return False
             
-            # 4. 编译阶段
-            if not self.compile_phase():
+            # 4. 转换阶段
+            if not self.convert_phase():
                 return False
             
-            # 5. 转换阶段
-            if not self.convert_phase():
+            # 5. 编译阶段
+            if not self.compile_phase():
                 return False
             
             # 6. 清理阶段

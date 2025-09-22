@@ -255,12 +255,13 @@ class CompilerService:
         
         return result
     
-    def compile_all_rulesets(self, process_results: Dict[str, ProcessedData]) -> Dict[str, CompileResult]:
+    def compile_all_rulesets(self, process_results: Dict[str, ProcessedData], convert_results: Optional[Dict[str, Any]] = None) -> Dict[str, CompileResult]:
         """
-        编译所有规则集
+        编译所有规则集（包括rulesets处理的和convert转换的）
         
         Args:
             process_results: 处理结果字典
+            convert_results: 转换结果字典（可选）
             
         Returns:
             编译结果字典
@@ -269,14 +270,25 @@ class CompilerService:
         
         self.logger.header("开始编译阶段")
         
-        # 只编译成功处理的规则集
-        successful_processed = {
-            name: data for name, data in process_results.items() 
-            if data.success and data.output_file
-        }
+        # 收集所有需要编译的JSON文件
+        compile_tasks = {}
         
-        if not successful_processed:
-            self.logger.warning("⚠️ 没有成功处理的规则集需要编译")
+        # 1. 收集rulesets处理生成的JSON文件
+        for name, data in process_results.items():
+            if data.success and data.output_file:
+                compile_tasks[name] = data.output_file
+        
+        # 2. 收集convert转换生成的JSON文件
+        if convert_results:
+            for convert_name, convert_data in convert_results.items():
+                if convert_data.is_successful():
+                    for json_file in convert_data.json_files:
+                        # 使用文件名作为任务名（去掉路径和扩展名）
+                        task_name = f"convert_{convert_name}_{Path(json_file).stem}"
+                        compile_tasks[task_name] = json_file
+        
+        if not compile_tasks:
+            self.logger.warning("⚠️ 没有需要编译的JSON文件")
             return results
         
         try:
@@ -293,24 +305,24 @@ class CompilerService:
                 results[ruleset_name] = failed_result
             return results
         
-        self.logger.info(f"📋 需要编译 {len(successful_processed)} 个规则集")
+        self.logger.info(f"📋 需要编译 {len(compile_tasks)} 个JSON文件")
         
-        for i, (ruleset_name, processed_data) in enumerate(successful_processed.items(), 1):
-            self.logger.step(f"编译规则集: {ruleset_name}", i, len(successful_processed))
+        for i, (task_name, json_file) in enumerate(compile_tasks.items(), 1):
+            self.logger.step(f"编译文件: {task_name}", i, len(compile_tasks))
             
             try:
-                compile_result = self.compile_ruleset(ruleset_name, processed_data.output_file)
-                results[ruleset_name] = compile_result
+                compile_result = self.compile_ruleset(task_name, json_file)
+                results[task_name] = compile_result
                 
             except Exception as e:
-                self.logger.error(f"❌ 规则集 {ruleset_name} 编译异常: {str(e)}")
+                self.logger.error(f"❌ 文件 {task_name} 编译异常: {str(e)}")
                 # 创建失败的编译结果
-                failed_result = CompileResult(ruleset_name)
+                failed_result = CompileResult(task_name)
                 failed_result.set_error(f"编译异常: {str(e)}")
-                results[ruleset_name] = failed_result
+                results[task_name] = failed_result
             
             # 添加分隔线（除了最后一个）
-            if i < len(successful_processed):
+            if i < len(compile_tasks):
                 self.logger.info("─" * 50)
         
         # 输出总体统计

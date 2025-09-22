@@ -301,21 +301,8 @@ class ConverterService:
                 result_rules_str = result_rules_str.replace('\\\\', '\\')
                 output_file.write(result_rules_str)
             
-            # 编译SRS文件
-            srs_path = file_name.with_suffix('.srs')
-            
-            # 确保SRS输出目录存在
-            srs_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            compile_cmd = f"sing-box rule-set compile --output {srs_path} {file_name}"
-            result = os.system(compile_cmd)
-            
-            if result == 0:
-                self.logger.success(f"✅ 转换完成: {file_name}")
-                return str(file_name)
-            else:
-                self.logger.warning(f"⚠️ SRS编译失败: {link}")
-                return str(file_name)  # 即使SRS编译失败，JSON文件仍然成功
+            self.logger.success(f"✅ 转换完成: {file_name}")
+            return str(file_name)
                 
         except Exception as e:
             self.logger.error(f"❌ 转换链接失败: {link} - {str(e)}")
@@ -342,11 +329,9 @@ class ConverterService:
         # 获取输出目录配置
         output_config = self.config_manager.get_output_config()
         json_dir = Path(output_config["json_dir"])
-        srs_dir = Path(output_config["srs_dir"])
         
         # 为每个convert规则集创建子目录
         convert_json_dir = json_dir / "convert" / convert_name
-        convert_srs_dir = srs_dir / "convert" / convert_name
         
         # 转换每个链接
         for i, url in enumerate(urls, 1):
@@ -354,17 +339,7 @@ class ConverterService:
             
             json_file = self.convert_single_link(url, convert_json_dir)
             if json_file:
-                # 生成对应的SRS文件路径
-                json_path = Path(json_file)
-                srs_file = convert_srs_dir / json_path.with_suffix('.srs').name
-                
-                # 如果SRS文件存在，记录成功
-                if srs_file.exists():
-                    converted_data.add_converted_file(json_file, str(srs_file))
-                else:
-                    # 即使SRS文件不存在，JSON文件成功也算部分成功
-                    converted_data.add_converted_file(json_file, "")
-                    converted_data.add_error(f"SRS文件生成失败: {url}")
+                converted_data.add_converted_file(json_file, "")  # SRS文件将在编译阶段统一生成
             else:
                 converted_data.add_error(f"转换失败: {url}")
         
@@ -373,7 +348,6 @@ class ConverterService:
             self.logger.success(f"✅ 规则集 {convert_name} 转换完成")
             self.logger.info(f"📊 成功: {converted_data.success_count}/{converted_data.total_count}")
             self.logger.info(f"📄 JSON文件: {len(converted_data.json_files)} 个")
-            self.logger.info(f"📄 SRS文件: {len([f for f in converted_data.srs_files if f])} 个")
         else:
             self.logger.error(f"❌ 规则集 {convert_name} 转换失败")
         
@@ -445,14 +419,11 @@ class ConverterService:
         successful_links = sum(data.success_count for data in results.values())
         
         total_json_files = sum(len(data.json_files) for data in results.values())
-        total_srs_files = sum(len([f for f in data.srs_files if f]) for data in results.values())
-        
         return {
             'total_converts': total_converts,
             'successful_converts': successful_converts,
             'total_links': total_links,
             'successful_links': successful_links,
             'total_json_files': total_json_files,
-            'total_srs_files': total_srs_files,
             'success_rate': (successful_links / total_links * 100) if total_links > 0 else 0
         }
