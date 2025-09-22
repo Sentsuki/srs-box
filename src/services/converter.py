@@ -320,13 +320,13 @@ class ConverterService:
                 output_file.write(result_rules_str)
             
             converted_data.add_converted_file(str(file_name), "")
-            self.logger.success(f"✅ 转换完成（合并到单个文件）: {file_name}")
+            self.logger.info(f"✅ 转换完成（合并到单个文件）: {file_name}")
         else:
             self.logger.error(f"❌ 规则集 {convert_name} 无有效数据")
         
         # 输出转换结果摘要
         if converted_data.is_successful():
-            self.logger.success(f"✅ 规则集 {convert_name} 转换完成")
+            self.logger.info(f"✅ 规则集 {convert_name} 转换完成")
             self.logger.info(f"📊 成功: {converted_data.success_count}/{converted_data.total_count}")
             self.logger.info(f"📄 JSON文件: {len(converted_data.json_files)} 个")
         else:
@@ -380,7 +380,7 @@ class ConverterService:
         # 输出总体统计
         stats = self.get_convert_statistics(results)
         self.logger.separator("转换阶段完成")
-        self.logger.success(f"✅ 转换完成: {stats['successful_urls']}/{stats['total_urls']} 个链接成功")
+        self.logger.success(f"✅ 转换完成: {stats['successful_urls']}/{stats['total_urls']} 个配置成功")
         
         return results
     

@@ -261,7 +261,7 @@ class DownloadService:
         
         # 输出下载结果摘要
         if downloaded_data.is_successful():
-            self.logger.success(f"✅ 规则集 {ruleset_name} 下载完成")
+            self.logger.info(f"✅ 规则集 {ruleset_name} 下载完成")
             self.logger.info(f"📊 成功: {downloaded_data.success_count}/{downloaded_data.total_count}")
             
             if downloaded_data.has_json_data():
