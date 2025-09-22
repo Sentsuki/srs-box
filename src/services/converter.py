@@ -4,12 +4,9 @@
 融入现有的下载-处理-编译架构
 """
 
-import os
 import json
 import pandas as pd
 import re
-import concurrent.futures
-import requests
 import yaml
 import ipaddress
 from io import StringIO
@@ -20,6 +17,7 @@ from ..utils.config import ConfigManager
 from ..utils.logger import Logger
 from ..utils.file_utils import FileUtils
 from ..utils.network import NetworkUtils
+from .downloader import DownloadService, DownloadedData
 
 
 class ConvertedData:
@@ -70,6 +68,7 @@ class ConverterService:
         self.logger = logger
         self.network_utils = network_utils
         self.file_utils = file_utils
+        self.download_service = DownloadService(config_manager, logger, network_utils, file_utils)
         
         # 映射字典 - 从原有convert.py移植
         self.MAP_DICT = {
@@ -85,36 +84,56 @@ class ConverterService:
     
     def read_yaml_from_url(self, url: str) -> Any:
         """
-        从URL读取YAML数据
+        从URL读取YAML数据，使用DownloadService下载
         
         Args:
             url: YAML文件URL
             
         Returns:
             解析后的YAML数据
+            
+        Raises:
+            Exception: 下载或解析失败
         """
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        yaml_data = yaml.safe_load(response.text)
+        temp_dir = Path("temp") / "convert" / "temp_yaml"
+        self.file_utils.ensure_dir(temp_dir)
+        
+        # 使用DownloadService下载文本文件
+        text_files = self.download_service.download_text_rulesets([url], temp_dir)
+        
+        if not text_files:
+            raise Exception(f"无法下载YAML文件: {url}")
+        
+        # 读取下载的文件
+        yaml_content = self.file_utils.read_text_file(text_files[0])
+        yaml_data = yaml.safe_load('\n'.join(yaml_content))
         return yaml_data
     
     def read_list_from_url(self, url: str) -> Tuple[Optional[pd.DataFrame], List[Dict]]:
         """
-        从URL读取列表数据
+        从URL读取列表数据，使用DownloadService下载
         
         Args:
             url: 列表文件URL
             
         Returns:
             (DataFrame数据, 逻辑规则列表)
+            
+        Raises:
+            Exception: 下载或解析失败
         """
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(url, headers=headers)
-        if response.status_code != 200:
-            return None, []
+        temp_dir = Path("temp") / "convert" / "temp_list"
+        self.file_utils.ensure_dir(temp_dir)
         
-        csv_data = StringIO(response.text)
+        # 使用DownloadService下载文本文件
+        text_files = self.download_service.download_text_rulesets([url], temp_dir)
+        
+        if not text_files:
+            raise Exception(f"无法下载列表文件: {url}")
+        
+        # 读取下载的文件
+        csv_content = self.file_utils.read_text_file(text_files[0])
+        csv_data = StringIO('\n'.join(csv_content))
         df = pd.read_csv(csv_data, header=None, 
                         names=['pattern', 'address', 'other', 'other2', 'other3'], 
                         on_bad_lines='skip')
@@ -181,132 +200,35 @@ class ConverterService:
         Returns:
             (DataFrame数据, 逻辑规则列表)
         """
-        rules = []
-        
         # 根据链接扩展名分情况处理
         if link.endswith('.yaml') or link.endswith('.txt'):
-            try:
-                yaml_data = self.read_yaml_from_url(link)
-                rows = []
-                if not isinstance(yaml_data, str):
-                    items = yaml_data.get('payload', [])
-                else:
-                    lines = yaml_data.splitlines()
-                    line_content = lines[0]
-                    items = line_content.split()
-                
-                for item in items:
-                    address = item.strip("'")
-                    if ',' not in item:
-                        if self.is_ipv4_or_ipv6(item):
-                            pattern = 'IP-CIDR'
-                        else:
-                            if address.startswith('+') or address.startswith('.'):
-                                pattern = 'DOMAIN-SUFFIX'
-                                address = address[1:]
-                                if address.startswith('.'):
-                                    address = address[1:]
-                            else:
-                                pattern = 'DOMAIN'
+            yaml_data = self.read_yaml_from_url(link)
+            rows = []
+            if not isinstance(yaml_data, str):
+                items = yaml_data.get('payload', [])
+            else:
+                items = yaml_data.splitlines()
+            
+            for item in items:
+                if isinstance(item, str):
+                    # 简单处理，假设每行是一个pattern:address对
+                    parts = item.split(',', 1)
+                    if len(parts) == 2:
+                        rows.append({'pattern': parts[0].strip(), 'address': parts[1].strip()})
                     else:
-                        pattern, address = item.split(',', 1)
-                    
-                    if ',' in address:
-                        address = address.split(',', 1)[0]
-                    
-                    rows.append({'pattern': pattern.strip(), 'address': address.strip(), 'other': None})
-                
-                df = pd.DataFrame(rows, columns=['pattern', 'address', 'other'])
-            except:
-                df, rules = self.read_list_from_url(link)
+                        rows.append({'pattern': 'domain', 'address': item.strip()})
+                elif isinstance(item, dict):
+                    for key, value in item.items():
+                        if isinstance(value, list):
+                            for v in value:
+                                rows.append({'pattern': key, 'address': v})
+                        else:
+                            rows.append({'pattern': key, 'address': value})
+            
+            df = pd.DataFrame(rows)
+            return df, []  # YAML通常没有逻辑规则
         else:
-            df, rules = self.read_list_from_url(link)
-        
-        return df, rules
-    
-    def sort_dict(self, obj: Any) -> Any:
-        """
-        对字典进行排序，含list of dict
-        
-        Args:
-            obj: 要排序的对象
-            
-        Returns:
-            排序后的对象
-        """
-        if isinstance(obj, dict):
-            return {k: self.sort_dict(obj[k]) for k in sorted(obj)}
-        elif isinstance(obj, list) and all(isinstance(elem, dict) for elem in obj):
-            return sorted([self.sort_dict(x) for x in obj], key=lambda d: sorted(d.keys())[0])
-        elif isinstance(obj, list):
-            return sorted(self.sort_dict(x) for x in obj)
-        else:
-            return obj
-    
-    def convert_single_link(self, link: str, output_directory: Path) -> Optional[str]:
-        """
-        转换单个链接为JSON和SRS文件
-        
-        Args:
-            link: 要转换的链接
-            output_directory: 输出目录
-            
-        Returns:
-            生成的JSON文件路径，失败返回None
-        """
-        try:
-            self.logger.info(f"🔄 转换链接: {link}")
-            
-            # 解析链接数据
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                results = list(executor.map(self.parse_and_convert_to_dataframe, [link]))
-                dfs = [df for df, rules in results]
-                rules_list = [rules for df, rules in results]
-                df = pd.concat(dfs, ignore_index=True)
-            
-            # 数据清理
-            df = df[~df['pattern'].str.contains('#')].reset_index(drop=True)
-            df = df[df['pattern'].isin(self.MAP_DICT.keys())].reset_index(drop=True)
-            df = df.drop_duplicates().reset_index(drop=True)
-            df['pattern'] = df['pattern'].replace(self.MAP_DICT)
-            
-            # 确保输出目录存在
-            self.file_utils.ensure_dir(output_directory)
-            
-            # 构建规则集
-            result_rules = {"version": 2, "rules": []}
-            domain_entries = []
-            
-            for pattern, addresses in df.groupby('pattern')['address'].apply(list).to_dict().items():
-                if pattern == 'domain_suffix':
-                    rule_entry = {pattern: [address.strip() for address in addresses]}
-                    result_rules["rules"].append(rule_entry)
-                elif pattern == 'domain':
-                    domain_entries.extend([address.strip() for address in addresses])
-                else:
-                    rule_entry = {pattern: [address.strip() for address in addresses]}
-                    result_rules["rules"].append(rule_entry)
-            
-            # 删除domain_entries中的重复值
-            domain_entries = list(set(domain_entries))
-            if domain_entries:
-                result_rules["rules"].insert(0, {'domain': domain_entries})
-            
-            # 生成文件名
-            file_name = output_directory / f"{os.path.basename(link).split('.')[0]}.json"
-            
-            # 写入JSON文件
-            with open(file_name, 'w', encoding='utf-8') as output_file:
-                result_rules_str = json.dumps(self.sort_dict(result_rules), ensure_ascii=False, indent=2)
-                result_rules_str = result_rules_str.replace('\\\\', '\\')
-                output_file.write(result_rules_str)
-            
-            self.logger.success(f"✅ 转换完成: {file_name}")
-            return str(file_name)
-                
-        except Exception as e:
-            self.logger.error(f"❌ 转换链接失败: {link} - {str(e)}")
-            return None
+            return self.read_list_from_url(link)
     
     def convert_ruleset(self, convert_name: str, urls: List[str]) -> ConvertedData:
         """
@@ -341,17 +263,12 @@ class ConverterService:
             
             try:
                 # 根据链接类型解析
-                if url.endswith('.yaml') or url.endswith('.txt'):
-                    yaml_data = self.read_yaml_from_url(url)
-                    # 处理yaml_data到df（复用原有逻辑，假设parse_and_convert_to_dataframe处理它）
-                    df, logic_rules = self.parse_and_convert_to_dataframe(url)  # 如果需要调整parse_and_convert_to_dataframe以返回df和rules
-                else:
-                    df, logic_rules = self.read_list_from_url(url)
+                df, logic_rules = self.parse_and_convert_to_dataframe(url)
                 
                 # 收集逻辑规则
                 all_logic_rules.extend(logic_rules)
                 
-                # 过滤df（复用原有代码中的filtered_rows逻辑）
+                # 过滤df
                 filtered_rows = []
                 for index, row in df.iterrows():
                     if 'AND' not in row['pattern']:
@@ -375,9 +292,8 @@ class ConverterService:
                 converted_data.add_error(f"转换失败: {url} - {str(e)}")
                 continue
         
-        # 如果有成功处理的链接，构建合并的ruleset
+        # 如果有成功处理的链接，构建合并的规则集
         if merged_by_type or all_logic_rules or domain_entries:
-            # 使用 config 中的 version，而不是硬编码的 2
             merged_ruleset = {"version": self.config_manager.get_version(), "rules": []}
             
             # 添加非domain规则
@@ -462,9 +378,9 @@ class ConverterService:
                 self.logger.info("─" * 50)
         
         # 输出总体统计
-        successful_converts = sum(1 for data in results.values() if data.is_successful())
+        stats = self.get_convert_statistics(results)
         self.logger.separator("转换阶段完成")
-        self.logger.success(f"✅ 转换完成: {successful_converts}/{len(convert_config)} 个规则集成功")
+        self.logger.success(f"✅ 转换完成: {stats['successful_urls']}/{stats['total_urls']} 个链接成功")
         
         return results
     
@@ -480,15 +396,32 @@ class ConverterService:
         """
         total_converts = len(results)
         successful_converts = sum(1 for data in results.values() if data.is_successful())
-        total_links = sum(data.total_count for data in results.values())
-        successful_links = sum(data.success_count for data in results.values())
-        
+        total_urls = sum(data.total_count for data in results.values())
+        successful_urls = sum(data.success_count for data in results.values())
         total_json_files = sum(len(data.json_files) for data in results.values())
+        
         return {
             'total_converts': total_converts,
             'successful_converts': successful_converts,
-            'total_links': total_links,
-            'successful_links': successful_links,
+            'total_urls': total_urls,
+            'successful_urls': successful_urls,
             'total_json_files': total_json_files,
-            'success_rate': (successful_links / total_links * 100) if total_links > 0 else 0
+            'success_rate': (successful_urls / total_urls * 100) if total_urls > 0 else 0
         }
+
+    def sort_dict(self, data: Dict) -> Dict:
+        """
+        递归排序字典（保持原有逻辑）
+        
+        Args:
+            data: 要排序的字典或数据
+            
+        Returns:
+            排序后的字典
+        """
+        if isinstance(data, dict):
+            return {k: self.sort_dict(v) for k, v in sorted(data.items())}
+        elif isinstance(data, list):
+            return [self.sort_dict(item) if isinstance(item, (dict, list)) else item for item in data]
+        else:
+            return data
