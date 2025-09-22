@@ -377,7 +377,8 @@ class ConverterService:
         
         # 如果有成功处理的链接，构建合并的ruleset
         if merged_by_type or all_logic_rules or domain_entries:
-            merged_ruleset = {"version": 2, "rules": []}
+            # 使用 config 中的 version，而不是硬编码的 2
+            merged_ruleset = {"version": self.config_manager.get_version(), "rules": []}
             
             # 添加非domain规则
             for pattern, values in merged_by_type.items():
