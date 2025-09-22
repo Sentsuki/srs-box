@@ -283,8 +283,8 @@ class CompilerService:
             for convert_name, convert_data in convert_results.items():
                 if convert_data.is_successful():
                     for json_file in convert_data.json_files:
-                        # 使用文件名作为任务名（去掉路径和扩展名）
-                        task_name = f"convert_{convert_name}_{Path(json_file).stem}"
+                        # 修改task_name为convert_name（因为现在合并到一个文件）
+                        task_name = convert_name
                         compile_tasks[task_name] = json_file
         
         if not compile_tasks:

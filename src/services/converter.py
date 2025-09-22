@@ -310,7 +310,7 @@ class ConverterService:
     
     def convert_ruleset(self, convert_name: str, urls: List[str]) -> ConvertedData:
         """
-        转换单个convert规则集的所有链接
+        转换单个convert规则集的所有链接，并合并规则到一个JSON文件
         
         Args:
             convert_name: convert规则集名称
@@ -326,22 +326,86 @@ class ConverterService:
         converted_data = ConvertedData(convert_name)
         converted_data.set_total_count(len(urls))
         
-        # 获取输出目录配置
+        # 获取输出目录配置（直接使用json_dir，无子目录）
         output_config = self.config_manager.get_output_config()
         json_dir = Path(output_config["json_dir"])
+        self.file_utils.ensure_dir(json_dir)
         
-        # 为每个convert规则集创建子目录
-        convert_json_dir = json_dir / "convert" / convert_name
+        # 初始化合并结构
+        merged_by_type = {}  # pattern -> set of stripped addresses (for dedup)
+        all_logic_rules = []  # 收集所有逻辑规则
+        domain_entries = set()  # 单独收集domain，用于去重并插入开头
         
-        # 转换每个链接
         for i, url in enumerate(urls, 1):
             self.logger.info(f"🔄 转换链接 ({i}/{len(urls)}): {url}")
             
-            json_file = self.convert_single_link(url, convert_json_dir)
-            if json_file:
-                converted_data.add_converted_file(json_file, "")  # SRS文件将在编译阶段统一生成
-            else:
-                converted_data.add_error(f"转换失败: {url}")
+            try:
+                # 根据链接类型解析
+                if url.endswith('.yaml') or url.endswith('.txt'):
+                    yaml_data = self.read_yaml_from_url(url)
+                    # 处理yaml_data到df（复用原有逻辑，假设parse_and_convert_to_dataframe处理它）
+                    df, logic_rules = self.parse_and_convert_to_dataframe(url)  # 如果需要调整parse_and_convert_to_dataframe以返回df和rules
+                else:
+                    df, logic_rules = self.read_list_from_url(url)
+                
+                # 收集逻辑规则
+                all_logic_rules.extend(logic_rules)
+                
+                # 过滤df（复用原有代码中的filtered_rows逻辑）
+                filtered_rows = []
+                for index, row in df.iterrows():
+                    if 'AND' not in row['pattern']:
+                        filtered_rows.append(row)
+                df_filtered = pd.DataFrame(filtered_rows, columns=['pattern', 'address', 'other', 'other2', 'other3'])
+                
+                # groupby并合并到merged_by_type
+                for pattern, addresses in df_filtered.groupby('pattern')['address'].apply(list).to_dict().items():
+                    stripped = {addr.strip() for addr in addresses}  # set for dedup
+                    mapped_pattern = self.MAP_DICT.get(pattern, pattern)  # 映射到标准类型
+                    
+                    if mapped_pattern == 'domain':
+                        domain_entries.update(stripped)
+                    else:
+                        if mapped_pattern not in merged_by_type:
+                            merged_by_type[mapped_pattern] = set()
+                        merged_by_type[mapped_pattern].update(stripped)
+            
+            except Exception as e:
+                self.logger.warning(f"⚠️ 链接转换失败: {url} - {str(e)}")
+                converted_data.add_error(f"转换失败: {url} - {str(e)}")
+                continue
+        
+        # 如果有成功处理的链接，构建合并的ruleset
+        if merged_by_type or all_logic_rules or domain_entries:
+            merged_ruleset = {"version": 2, "rules": []}
+            
+            # 添加非domain规则
+            for pattern, values in merged_by_type.items():
+                if values:
+                    sorted_values = sorted(list(values))  # 可选：排序
+                    merged_ruleset["rules"].append({pattern: sorted_values})
+            
+            # 添加domain（插入开头，去重）
+            if domain_entries:
+                sorted_domains = sorted(list(domain_entries))
+                merged_ruleset["rules"].insert(0, {'domain': sorted_domains})
+            
+            # 添加逻辑规则（追加到末尾）
+            merged_ruleset["rules"].extend(all_logic_rules)
+            
+            # 生成文件名（使用convert_name）
+            file_name = json_dir / f"{convert_name}.json"
+            
+            # 写入JSON文件
+            with open(file_name, 'w', encoding='utf-8') as output_file:
+                result_rules_str = json.dumps(self.sort_dict(merged_ruleset), ensure_ascii=False, indent=2)
+                result_rules_str = result_rules_str.replace('\\\\', '\\')
+                output_file.write(result_rules_str)
+            
+            converted_data.add_converted_file(str(file_name), "")
+            self.logger.success(f"✅ 转换完成（合并到单个文件）: {file_name}")
+        else:
+            self.logger.error(f"❌ 规则集 {convert_name} 无有效数据")
         
         # 输出转换结果摘要
         if converted_data.is_successful():
