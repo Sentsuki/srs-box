@@ -31,9 +31,6 @@ class ExecutionSummary:
         self.total_output_size = 0
         self.errors: List[str] = []
         self.warnings: List[str] = []
-        # 新增：总下载链接统计
-        self.total_download_sources = 0
-        self.successful_download_sources = 0
     
     def add_error(self, error: str) -> None:
         """添加错误信息"""
@@ -156,15 +153,21 @@ class RulesetGenerator:
             
             self.summary.successful_downloads = successful_downloads
             
-            # 新增：收集下载链接统计
-            download_stats = self.download_service.get_download_statistics(self.download_results)
-            self.summary.total_download_sources += download_stats.get('total_sources', 0)
-            self.summary.successful_download_sources += download_stats.get('successful_sources', 0)
-            
             if successful_downloads == 0:
                 self.logger.error("❌ 没有成功下载任何规则集")
                 self.summary.add_error("没有成功下载任何规则集")
                 return False
+            
+            # 记录失败的下载
+            failed_downloads = []
+            for name, data in self.download_results.items():
+                if not data.is_successful():
+                    failed_downloads.append(name)
+                    for error in data.errors:
+                        self.summary.add_warning(f"规则集 {name}: {error}")
+            
+            if failed_downloads:
+                self.summary.add_warning(f"部分规则集下载失败: {', '.join(failed_downloads)}")
             
             return True
             
@@ -281,33 +284,36 @@ class RulesetGenerator:
             是否有成功的转换
         """
         try:
-            # 获取convert配置
-            config = self.config_manager.load_config()
-            convert_config = config.get('convert', {})
-            
-            if not convert_config:
-                self.logger.info("📋 没有convert配置，跳过转换阶段")
-                return True
-            
             self.logger.separator("开始转换阶段")
             
-            # 执行转换（包括下载）
+            # 执行转换
             self.convert_results = self.converter_service.convert_all_rulesets()
+            
+            # 如果没有convert配置，跳过此阶段
+            if not self.convert_results:
+                self.logger.info("📋 没有convert配置，跳过转换阶段")
+                return True  # 没有convert配置不算失败
             
             # 统计结果
             successful_converts = sum(
                 1 for data in self.convert_results.values() if data.is_successful()
             )
             
-            # 新增：收集转换链接统计（包括下载）
-            convert_stats = self.converter_service.get_convert_statistics(self.convert_results)
-            self.summary.total_download_sources += convert_stats.get('total_sources', 0)
-            self.summary.successful_download_sources += convert_stats.get('successful_sources', 0)
-            
             if successful_converts == 0:
-                self.logger.warning("⚠️ 没有成功转换任何规则集")
-                self.summary.add_warning("没有成功转换任何规则集")
+                self.logger.error("❌ 没有成功转换任何规则集")
+                self.summary.add_error("没有成功转换任何规则集")
                 return False
+            
+            # 记录失败的转换
+            failed_converts = []
+            for name, data in self.convert_results.items():
+                if not data.is_successful():
+                    failed_converts.append(name)
+                    for error in data.errors:
+                        self.summary.add_warning(f"转换规则集 {name}: {error}")
+            
+            if failed_converts:
+                self.summary.add_warning(f"部分转换规则集失败: {', '.join(failed_converts)}")
             
             return True
             
@@ -341,35 +347,47 @@ class RulesetGenerator:
         """
         self.logger.separator("执行摘要")
         
-        # 新增：总下载链接统计
-        if self.summary.total_download_sources > 0:
-            self.logger.success(f"✅ 总下载完成: {self.summary.successful_download_sources}/{self.summary.total_download_sources} 个链接成功")
+        # 基本统计
+        self.logger.info(f"📊 执行统计:")
+        self.logger.info(f"   总规则集数量: {self.summary.total_rulesets}")
+        self.logger.info(f"   成功下载: {self.summary.successful_downloads}")
+        self.logger.info(f"   成功处理: {self.summary.successful_processes}")
+        self.logger.info(f"   成功编译: {self.summary.successful_compiles}")
         
-        self.logger.info(f"📊 规则集统计: {self.summary.successful_downloads}/{self.summary.total_rulesets} 个规则集成功")
-        self.logger.info(f"📊 处理统计: {self.summary.successful_processes}/{self.summary.total_rulesets} 个规则集成功")
-        self.logger.info(f"📊 编译统计: {self.summary.successful_compiles}/{self.summary.total_rulesets} 个规则集成功")
-        self.logger.info(f"📊 总规则数: {self.summary.total_rules}")
-        formatted_size = self.file_utils.format_file_size(self.summary.total_output_size)
-        self.logger.info(f"📊 总输出大小: {formatted_size}")
+        if self.summary.total_rules > 0:
+            self.logger.info(f"   总规则数量: {self.summary.total_rules:,}")
         
-        # 显示错误和警告
-        if self.summary.errors:
-            self.logger.separator("错误信息")
-            for error in self.summary.errors:
-                self.logger.error(f"❌ {error}")
+        if self.summary.total_output_size > 0:
+            formatted_size = self.file_utils.format_file_size(self.summary.total_output_size)
+            self.logger.info(f"   输出文件总大小: {formatted_size}")
         
-        if self.summary.warnings:
-            self.logger.separator("警告信息")
-            for warning in self.summary.warnings:
-                self.logger.warning(f"⚠️ {warning}")
+        # 显示转换统计
+        if self.convert_results:
+            convert_stats = self.get_convert_statistics()
+            self.logger.info(f"   转换规则集: {convert_stats['successful_converts']}/{convert_stats['total_converts']}")
+            self.logger.info(f"   转换链接: {convert_stats['successful_links']}/{convert_stats['total_links']}")
+            self.logger.info(f"   生成JSON文件: {convert_stats['total_json_files']}")
         
-        # 显示生成的文件信息
+        # 显示生成的文件
         self._show_generated_files()
         
+        # 显示警告和错误
+        if self.summary.warnings:
+            self.logger.info(f"\n⚠️ 警告信息 ({len(self.summary.warnings)} 个):")
+            for warning in self.summary.warnings:
+                self.logger.warning(f"   {warning}")
+        
+        if self.summary.errors:
+            self.logger.info(f"\n❌ 错误信息 ({len(self.summary.errors)} 个):")
+            for error in self.summary.errors:
+                self.logger.error(f"   {error}")
+        
+        # 最终状态
+        self.logger.info("")  # 添加空行分隔
         if self.summary.successful_compiles > 0:
-            self.logger.success("🎉 规则集生成成功！")
+            self.logger.success(f"🎉 规则集生成完成！成功生成 {self.summary.successful_compiles} 个规则集")
         else:
-            self.logger.error("💥 规则集生成失败！没有成功生成任何规则集")
+            self.logger.error(f"💥 规则集生成失败！没有成功生成任何规则集")
     
     def _show_generated_files(self) -> None:
         """
