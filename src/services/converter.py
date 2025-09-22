@@ -396,17 +396,17 @@ class ConverterService:
         """
         total_converts = len(results)
         successful_converts = sum(1 for data in results.values() if data.is_successful())
-        total_urls = sum(data.total_count for data in results.values())
-        successful_urls = sum(data.success_count for data in results.values())
-        total_json_files = sum(len(data.json_files) for data in results.values())
+        total_sources = sum(data.total_count for data in results.values())  # 修改为 total_sources
+        successful_sources = sum(data.success_count for data in results.values())  # 修改为 successful_sources
         
+        total_json_files = sum(len(data.json_files) for data in results.values())
         return {
             'total_converts': total_converts,
             'successful_converts': successful_converts,
-            'total_urls': total_urls,
-            'successful_urls': successful_urls,
+            'total_sources': total_sources,
+            'successful_sources': successful_sources,
             'total_json_files': total_json_files,
-            'success_rate': (successful_urls / total_urls * 100) if total_urls > 0 else 0
+            'success_rate': (successful_sources / total_sources * 100) if total_sources > 0 else 0
         }
 
     def sort_dict(self, data: Dict) -> Dict:
