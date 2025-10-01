@@ -312,8 +312,8 @@ class DownloadService:
         
         # 输出总体统计
         successful_rulesets = sum(1 for data in results.values() if data.is_successful())
-        self.logger.separator("下载阶段完成")
-        self.logger.success(f"✅ 下载完成: {successful_rulesets}/{len(rulesets)} 个规则集成功")
+        self.logger.separator("Rulesets 下载完成")
+        self.logger.info(f"✅ Rulesets 下载完成: {successful_rulesets}/{len(rulesets)} 个成功")
         
         return results
     
