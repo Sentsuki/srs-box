@@ -317,6 +317,47 @@ class DownloadService:
         
         return results
     
+    def download_all_rulesets_unified(self, all_rulesets: Dict[str, List[str]]) -> Dict[str, DownloadedData]:
+        """
+        统一下载所有规则集（包括rulesets和convert）
+        
+        Args:
+            all_rulesets: 所有规则集的配置字典
+            
+        Returns:
+            规则集名称到下载数据的映射
+        """
+        results = {}
+        
+        self.logger.header("开始统一下载阶段")
+        self.logger.info(f"📋 发现 {len(all_rulesets)} 个规则集（包括rulesets和convert）")
+        
+        for i, (ruleset_name, urls) in enumerate(all_rulesets.items(), 1):
+            self.logger.step(f"下载规则集: {ruleset_name}", i, len(all_rulesets))
+            
+            try:
+                downloaded_data = self.download_ruleset(ruleset_name, urls)
+                results[ruleset_name] = downloaded_data
+                
+            except Exception as e:
+                self.logger.error(f"❌ 规则集 {ruleset_name} 下载异常: {str(e)}")
+                # 创建失败的下载数据
+                failed_data = DownloadedData(ruleset_name)
+                failed_data.set_total_count(len(urls))
+                failed_data.add_error(f"下载异常: {str(e)}")
+                results[ruleset_name] = failed_data
+            
+            # 添加分隔线（除了最后一个）
+            if i < len(all_rulesets):
+                self.logger.info("─" * 50)
+        
+        # 输出总体统计
+        successful_rulesets = sum(1 for data in results.values() if data.is_successful())
+        self.logger.separator("统一下载阶段完成")
+        self.logger.success(f"✅ 下载完成: {successful_rulesets}/{len(all_rulesets)} 个规则集成功")
+        
+        return results
+    
     def cleanup_temp_files(self, keep_patterns: Optional[List[str]] = None) -> None:
         """
         清理临时文件
