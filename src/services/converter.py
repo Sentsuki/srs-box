@@ -17,7 +17,7 @@ from ..utils.config import ConfigManager
 from ..utils.logger import Logger
 from ..utils.file_utils import FileUtils
 from ..utils.network import NetworkUtils
-from .downloader import DownloadedData
+from .downloader import DownloadService, DownloadedData
 
 
 class ConvertedData:
@@ -68,7 +68,7 @@ class ConverterService:
         self.logger = logger
         self.network_utils = network_utils
         self.file_utils = file_utils
-
+        self.download_service = DownloadService(config_manager, logger, network_utils, file_utils)
         
         # 映射字典 - 从原有convert.py移植
         self.MAP_DICT = {
@@ -82,72 +82,173 @@ class ConverterService:
             "URL-REGEX": "domain_regex", "DOMAIN-REGEX": "domain_regex"
         }
     
-
-    
-    def convert_all_rulesets_from_downloads(self, convert_download_results: Dict[str, DownloadedData]) -> Dict[str, ConvertedData]:
+    def read_yaml_from_url(self, url: str) -> Any:
         """
-        从已下载的数据转换convert规则集
+        从URL读取YAML数据，使用DownloadService下载
         
         Args:
-            convert_download_results: convert类型的下载结果
+            url: YAML文件URL
             
         Returns:
-            convert规则集名称到转换数据的映射
+            解析后的YAML数据
+            
+        Raises:
+            Exception: 下载或解析失败
         """
-        if not convert_download_results:
-            self.logger.info("📋 没有convert下载数据，跳过转换")
-            return {}
+        temp_dir = Path("temp") / "convert" / "temp_yaml"
+        self.file_utils.ensure_dir(temp_dir)
         
-        results = {}
+        # 使用DownloadService下载文本文件
+        text_files = self.download_service.download_text_rulesets([url], temp_dir)
         
-        self.logger.header("开始convert转换阶段")
-        self.logger.info(f"📋 处理 {len(convert_download_results)} 个convert规则集")
+        if not text_files:
+            raise Exception(f"无法下载YAML文件: {url}")
         
-        for i, (convert_name, download_data) in enumerate(convert_download_results.items(), 1):
-            self.logger.step(f"转换规则集: {convert_name}", i, len(convert_download_results))
-            
-            try:
-                converted_data = self.convert_ruleset_from_download(convert_name, download_data)
-                results[convert_name] = converted_data
-                
-            except Exception as e:
-                self.logger.error(f"❌ 规则集 {convert_name} 转换异常: {str(e)}")
-                # 创建失败的转换数据
-                failed_data = ConvertedData(convert_name)
-                failed_data.set_total_count(download_data.total_count)
-                failed_data.add_error(f"转换异常: {str(e)}")
-                results[convert_name] = failed_data
-            
-            # 添加分隔线（除了最后一个）
-            if i < len(convert_download_results):
-                self.logger.info("─" * 50)
-        
-        # 输出总体统计
-        stats = self.get_convert_statistics(results)
-        self.logger.separator("convert转换阶段完成")
-        self.logger.success(f"✅ 转换完成: {stats['successful_urls']}/{stats['total_urls']} 个配置成功")
-        
-        return results
+        # 读取下载的文件
+        yaml_content = self.file_utils.read_text_file(text_files[0])
+        yaml_data = yaml.safe_load('\n'.join(yaml_content))
+        return yaml_data
     
-    def convert_ruleset_from_download(self, convert_name: str, download_data: DownloadedData) -> ConvertedData:
+    def read_list_from_url(self, url: str) -> Tuple[Optional[pd.DataFrame], List[Dict]]:
         """
-        从已下载的数据转换单个convert规则集
+        从URL读取列表数据，使用DownloadService下载
+        
+        Args:
+            url: 列表文件URL
+            
+        Returns:
+            (DataFrame数据, 逻辑规则列表)
+            
+        Raises:
+            Exception: 下载或解析失败
+        """
+        temp_dir = Path("temp") / "convert" / "temp_list"
+        self.file_utils.ensure_dir(temp_dir)
+        
+        # 使用DownloadService下载文本文件
+        text_files = self.download_service.download_text_rulesets([url], temp_dir)
+        
+        if not text_files:
+            raise Exception(f"无法下载列表文件: {url}")
+        
+        # 读取下载的文件
+        csv_content = self.file_utils.read_text_file(text_files[0])
+        csv_data = StringIO('\n'.join(csv_content))
+        df = pd.read_csv(csv_data, header=None, 
+                        names=['pattern', 'address', 'other', 'other2', 'other3'], 
+                        on_bad_lines='skip')
+        
+        filtered_rows = []
+        rules = []
+        
+        # 处理逻辑规则
+        if 'AND' in df['pattern'].values:
+            and_rows = df[df['pattern'].str.contains('AND', na=False)]
+            for _, row in and_rows.iterrows():
+                rule = {
+                    "type": "logical",
+                    "mode": "and",
+                    "rules": []
+                }
+                pattern = ",".join(row.values.astype(str))
+                components = re.findall(r'\((.*?)\)', pattern)
+                for component in components:
+                    for keyword in self.MAP_DICT.keys():
+                        if keyword in component:
+                            match = re.search(f'{keyword},(.*)', component)
+                            if match:
+                                value = match.group(1)
+                                rule["rules"].append({
+                                    self.MAP_DICT[keyword]: value
+                                })
+                rules.append(rule)
+        
+        for index, row in df.iterrows():
+            if 'AND' not in row['pattern']:
+                filtered_rows.append(row)
+        
+        df_filtered = pd.DataFrame(filtered_rows, columns=['pattern', 'address', 'other', 'other2', 'other3'])
+        return df_filtered, rules
+    
+    def is_ipv4_or_ipv6(self, address: str) -> Optional[str]:
+        """
+        检查地址是否为IPv4或IPv6
+        
+        Args:
+            address: 要检查的地址
+            
+        Returns:
+            'ipv4', 'ipv6' 或 None
+        """
+        try:
+            ipaddress.IPv4Network(address)
+            return 'ipv4'
+        except ValueError:
+            try:
+                ipaddress.IPv6Network(address)
+                return 'ipv6'
+            except ValueError:
+                return None
+    
+    def parse_and_convert_to_dataframe(self, link: str) -> Tuple[Optional[pd.DataFrame], List[Dict]]:
+        """
+        解析链接并转换为DataFrame
+        
+        Args:
+            link: 要解析的链接
+            
+        Returns:
+            (DataFrame数据, 逻辑规则列表)
+        """
+        # 根据链接扩展名分情况处理
+        if link.endswith('.yaml') or link.endswith('.txt'):
+            yaml_data = self.read_yaml_from_url(link)
+            rows = []
+            if not isinstance(yaml_data, str):
+                items = yaml_data.get('payload', [])
+            else:
+                items = yaml_data.splitlines()
+            
+            for item in items:
+                if isinstance(item, str):
+                    # 简单处理，假设每行是一个pattern:address对
+                    parts = item.split(',', 1)
+                    if len(parts) == 2:
+                        rows.append({'pattern': parts[0].strip(), 'address': parts[1].strip()})
+                    else:
+                        rows.append({'pattern': 'domain', 'address': item.strip()})
+                elif isinstance(item, dict):
+                    for key, value in item.items():
+                        if isinstance(value, list):
+                            for v in value:
+                                rows.append({'pattern': key, 'address': v})
+                        else:
+                            rows.append({'pattern': key, 'address': value})
+            
+            df = pd.DataFrame(rows)
+            return df, []  # YAML通常没有逻辑规则
+        else:
+            return self.read_list_from_url(link)
+    
+    def convert_ruleset(self, convert_name: str, urls: List[str]) -> ConvertedData:
+        """
+        转换单个convert规则集的所有链接，并合并规则到一个JSON文件
         
         Args:
             convert_name: convert规则集名称
-            download_data: 已下载的数据
+            urls: URL列表
             
         Returns:
             转换数据结果
         """
         self.logger.info(f"🔄 开始转换规则集: {convert_name}")
-        self.logger.info(f"📋 已下载文件数量: {len(download_data.text_files)}")
+        self.logger.info(f"📋 链接数量: {len(urls)}")
         
         # 创建转换结果对象
         converted_data = ConvertedData(convert_name)
-        converted_data.set_total_count(download_data.total_count)
+        converted_data.set_total_count(len(urls))
         
-        # 获取输出目录配置
+        # 获取输出目录配置（直接使用json_dir，无子目录）
         output_config = self.config_manager.get_output_config()
         json_dir = Path(output_config["json_dir"])
         self.file_utils.ensure_dir(json_dir)
@@ -157,13 +258,12 @@ class ConverterService:
         all_logic_rules = []  # 收集所有逻辑规则
         domain_entries = set()  # 单独收集domain，用于去重并插入开头
         
-        # 处理已下载的文本文件
-        for i, file_path in enumerate(download_data.text_files, 1):
-            self.logger.info(f"🔄 处理文件 ({i}/{len(download_data.text_files)}): {file_path}")
+        for i, url in enumerate(urls, 1):
+            self.logger.info(f"🔄 转换链接 ({i}/{len(urls)}): {url}")
             
             try:
-                # 读取文件内容并解析
-                df, logic_rules = self.parse_downloaded_file(file_path)
+                # 根据链接类型解析
+                df, logic_rules = self.parse_and_convert_to_dataframe(url)
                 
                 # 收集逻辑规则
                 all_logic_rules.extend(logic_rules)
@@ -171,33 +271,28 @@ class ConverterService:
                 # 过滤df
                 filtered_rows = []
                 for index, row in df.iterrows():
-                    if 'AND' not in str(row.get('pattern', '')):
+                    if 'AND' not in row['pattern']:
                         filtered_rows.append(row)
+                df_filtered = pd.DataFrame(filtered_rows, columns=['pattern', 'address', 'other', 'other2', 'other3'])
                 
-                if filtered_rows:
-                    df_filtered = pd.DataFrame(filtered_rows)
+                # groupby并合并到merged_by_type
+                for pattern, addresses in df_filtered.groupby('pattern')['address'].apply(list).to_dict().items():
+                    stripped = {addr.strip() for addr in addresses}  # set for dedup
+                    mapped_pattern = self.MAP_DICT.get(pattern, pattern)  # 映射到标准类型
                     
-                    # groupby并合并到merged_by_type
-                    if 'pattern' in df_filtered.columns and 'address' in df_filtered.columns:
-                        for pattern, addresses in df_filtered.groupby('pattern')['address'].apply(list).to_dict().items():
-                            stripped = {str(addr).strip() for addr in addresses}  # set for dedup
-                            mapped_pattern = self.MAP_DICT.get(pattern, pattern)  # 映射到标准类型
-                            
-                            if mapped_pattern == 'domain':
-                                domain_entries.update(stripped)
-                            else:
-                                if mapped_pattern not in merged_by_type:
-                                    merged_by_type[mapped_pattern] = set()
-                                merged_by_type[mapped_pattern].update(stripped)
-                
-                converted_data.success_count += 1
-                
+                    if mapped_pattern == 'domain':
+                        domain_entries.update(stripped)
+                    else:
+                        if mapped_pattern not in merged_by_type:
+                            merged_by_type[mapped_pattern] = set()
+                        merged_by_type[mapped_pattern].update(stripped)
+            
             except Exception as e:
-                self.logger.warning(f"⚠️ 文件处理失败: {file_path} - {str(e)}")
-                converted_data.add_error(f"文件处理失败: {file_path} - {str(e)}")
+                self.logger.warning(f"⚠️ 链接转换失败: {url} - {str(e)}")
+                converted_data.add_error(f"转换失败: {url} - {str(e)}")
                 continue
         
-        # 如果有成功处理的文件，构建合并的规则集
+        # 如果有成功处理的链接，构建合并的规则集
         if merged_by_type or all_logic_rules or domain_entries:
             merged_ruleset = {"version": self.config_manager.get_version(), "rules": []}
             
@@ -243,87 +338,51 @@ class ConverterService:
         
         return converted_data
     
-    def parse_downloaded_file(self, file_path: str) -> Tuple[pd.DataFrame, List[Dict]]:
+    def convert_all_rulesets(self) -> Dict[str, ConvertedData]:
         """
-        解析已下载的文件
+        转换所有convert配置中的规则集
         
-        Args:
-            file_path: 文件路径
-            
         Returns:
-            (DataFrame数据, 逻辑规则列表)
+            convert规则集名称到转换数据的映射
         """
-        # 读取文件内容
-        content_lines = self.file_utils.read_text_file(file_path)
+        # 获取convert配置
+        config = self.config_manager.load_config()
+        convert_config = config.get('convert', {})
         
-        # 判断文件类型并解析
-        if file_path.endswith('.yaml') or file_path.endswith('.yml'):
-            # YAML文件处理
-            yaml_content = '\n'.join(content_lines)
-            yaml_data = yaml.safe_load(yaml_content)
+        if not convert_config:
+            self.logger.info("📋 没有发现convert配置，跳过转换阶段")
+            return {}
+        
+        results = {}
+        
+        self.logger.header("开始转换阶段")
+        self.logger.info(f"📋 发现 {len(convert_config)} 个convert规则集")
+        
+        for i, (convert_name, urls) in enumerate(convert_config.items(), 1):
+            self.logger.step(f"转换规则集: {convert_name}", i, len(convert_config))
             
-            rows = []
-            if not isinstance(yaml_data, str):
-                items = yaml_data.get('payload', []) if isinstance(yaml_data, dict) else yaml_data
-            else:
-                items = yaml_data.splitlines()
+            try:
+                converted_data = self.convert_ruleset(convert_name, urls)
+                results[convert_name] = converted_data
+                
+            except Exception as e:
+                self.logger.error(f"❌ 规则集 {convert_name} 转换异常: {str(e)}")
+                # 创建失败的转换数据
+                failed_data = ConvertedData(convert_name)
+                failed_data.set_total_count(len(urls))
+                failed_data.add_error(f"转换异常: {str(e)}")
+                results[convert_name] = failed_data
             
-            for item in items:
-                if isinstance(item, str):
-                    # 简单处理，假设每行是一个pattern:address对
-                    parts = item.split(',', 1)
-                    if len(parts) == 2:
-                        rows.append({'pattern': parts[0].strip(), 'address': parts[1].strip()})
-                    else:
-                        rows.append({'pattern': 'domain', 'address': item.strip()})
-                elif isinstance(item, dict):
-                    for key, value in item.items():
-                        if isinstance(value, list):
-                            for v in value:
-                                rows.append({'pattern': key, 'address': v})
-                        else:
-                            rows.append({'pattern': key, 'address': value})
-            
-            df = pd.DataFrame(rows)
-            return df, []  # YAML通常没有逻辑规则
-        else:
-            # 文本文件处理（CSV格式）
-            csv_content = StringIO('\n'.join(content_lines))
-            df = pd.read_csv(csv_content, header=None, 
-                            names=['pattern', 'address', 'other', 'other2', 'other3'], 
-                            on_bad_lines='skip')
-            
-            filtered_rows = []
-            rules = []
-            
-            # 处理逻辑规则
-            if 'AND' in df['pattern'].values:
-                and_rows = df[df['pattern'].str.contains('AND', na=False)]
-                for _, row in and_rows.iterrows():
-                    rule = {
-                        "type": "logical",
-                        "mode": "and",
-                        "rules": []
-                    }
-                    pattern = ",".join(row.values.astype(str))
-                    components = re.findall(r'\((.*?)\)', pattern)
-                    for component in components:
-                        for keyword in self.MAP_DICT.keys():
-                            if keyword in component:
-                                match = re.search(f'{keyword},(.*)', component)
-                                if match:
-                                    value = match.group(1)
-                                    rule["rules"].append({
-                                        self.MAP_DICT[keyword]: value
-                                    })
-                    rules.append(rule)
-            
-            for index, row in df.iterrows():
-                if 'AND' not in str(row['pattern']):
-                    filtered_rows.append(row)
-            
-            df_filtered = pd.DataFrame(filtered_rows, columns=['pattern', 'address', 'other', 'other2', 'other3'])
-            return df_filtered, rules
+            # 添加分隔线（除了最后一个）
+            if i < len(convert_config):
+                self.logger.info("─" * 50)
+        
+        # 输出总体统计
+        stats = self.get_convert_statistics(results)
+        self.logger.separator("转换阶段完成")
+        self.logger.success(f"✅ 转换完成: {stats['successful_urls']}/{stats['total_urls']} 个配置成功")
+        
+        return results
     
     def get_convert_statistics(self, results: Dict[str, ConvertedData]) -> Dict[str, Any]:
         """
