@@ -88,7 +88,8 @@ class RulesetGenerator:
         )
         
         # 执行结果存储
-        self.download_results: Dict[str, DownloadedData] = {}
+        self.ruleset_download_results: Dict[str, DownloadedData] = {}
+        self.convert_download_results: Dict[str, DownloadedData] = {}
         self.process_results: Dict[str, ProcessedData] = {}
         self.compile_results: Dict[str, CompileResult] = {}
         self.convert_results: Dict[str, ConvertedData] = {}
@@ -108,19 +109,29 @@ class RulesetGenerator:
             config = self.config_manager.load_config()
             
             rulesets = self.config_manager.get_rulesets()
+            convert_config = self.config_manager.get_convert_config()
             sing_box_config = self.config_manager.get_sing_box_config()
             
             self.logger.success("✅ 配置文件加载成功")
             self.logger.info(f"📊 配置信息:")
-            self.logger.info(f"   规则集数量: {len(rulesets)}")
+            self.logger.info(f"   rulesets规则集数量: {len(rulesets)}")
+            self.logger.info(f"   convert规则集数量: {len(convert_config)}")
+            self.logger.info(f"   总规则集数量: {len(rulesets) + len(convert_config)}")
             self.logger.info(f"   sing-box版本: {sing_box_config['version']}")
             self.logger.info(f"   平台: {sing_box_config['platform']}")
             
             # 显示规则集详情
-            for name, urls in rulesets.items():
-                self.logger.info(f"   - {name}: {len(urls)} 个数据源")
+            if rulesets:
+                self.logger.info(f"   rulesets规则集:")
+                for name, urls in rulesets.items():
+                    self.logger.info(f"     - {name}: {len(urls)} 个数据源")
             
-            self.summary.total_rulesets = len(rulesets)
+            if convert_config:
+                self.logger.info(f"   convert规则集:")
+                for name, urls in convert_config.items():
+                    self.logger.info(f"     - {name}: {len(urls)} 个数据源")
+            
+            self.summary.total_rulesets = len(rulesets) + len(convert_config)
             return True
             
         except FileNotFoundError:
@@ -135,7 +146,7 @@ class RulesetGenerator:
     
     def download_phase(self) -> bool:
         """
-        执行下载阶段
+        执行下载阶段（包括 rulesets 和 convert）
         
         Returns:
             是否有成功的下载
@@ -143,28 +154,41 @@ class RulesetGenerator:
         try:
             self.logger.separator("开始下载阶段")
             
-            # 执行下载
-            self.download_results = self.download_service.download_all_rulesets()
+            # 执行下载（同时下载 rulesets 和 convert）
+            self.ruleset_download_results, self.convert_download_results = self.download_service.download_all_rulesets()
             
             # 统计结果
-            successful_downloads = sum(
-                1 for data in self.download_results.values() if data.is_successful()
+            successful_rulesets = sum(
+                1 for data in self.ruleset_download_results.values() if data.is_successful()
             )
+            successful_converts = sum(
+                1 for data in self.convert_download_results.values() if data.is_successful()
+            )
+            total_successful = successful_rulesets + successful_converts
             
-            self.summary.successful_downloads = successful_downloads
+            self.summary.successful_downloads = total_successful
             
-            if successful_downloads == 0:
+            if total_successful == 0:
                 self.logger.error("❌ 没有成功下载任何规则集")
                 self.summary.add_error("没有成功下载任何规则集")
                 return False
             
             # 记录失败的下载
             failed_downloads = []
-            for name, data in self.download_results.items():
+            
+            # 检查 rulesets 失败
+            for name, data in self.ruleset_download_results.items():
                 if not data.is_successful():
-                    failed_downloads.append(name)
+                    failed_downloads.append(f"rulesets:{name}")
                     for error in data.errors:
-                        self.summary.add_warning(f"规则集 {name}: {error}")
+                        self.summary.add_warning(f"rulesets规则集 {name}: {error}")
+            
+            # 检查 convert 失败
+            for name, data in self.convert_download_results.items():
+                if not data.is_successful():
+                    failed_downloads.append(f"convert:{name}")
+                    for error in data.errors:
+                        self.summary.add_warning(f"convert规则集 {name}: {error}")
             
             if failed_downloads:
                 self.summary.add_warning(f"部分规则集下载失败: {', '.join(failed_downloads)}")
@@ -186,8 +210,8 @@ class RulesetGenerator:
         try:
             self.logger.separator("开始处理阶段")
             
-            # 执行处理
-            self.process_results = self.processor_service.process_all_rulesets(self.download_results)
+            # 执行处理（只处理 rulesets 的下载结果）
+            self.process_results = self.processor_service.process_all_rulesets(self.ruleset_download_results)
             
             # 统计结果
             successful_processes = sum(
@@ -278,21 +302,21 @@ class RulesetGenerator:
     
     def convert_phase(self) -> bool:
         """
-        执行转换阶段
+        执行转换阶段（使用已下载的 convert 数据）
         
         Returns:
             是否有成功的转换
         """
         try:
-            self.logger.separator("开始转换阶段")
-            
-            # 执行转换
-            self.convert_results = self.converter_service.convert_all_rulesets()
-            
-            # 如果没有convert配置，跳过此阶段
-            if not self.convert_results:
+            # 如果没有convert下载结果，跳过此阶段
+            if not self.convert_download_results:
                 self.logger.info("📋 没有convert配置，跳过转换阶段")
                 return True  # 没有convert配置不算失败
+            
+            self.logger.separator("开始转换阶段")
+            
+            # 使用已下载的数据执行转换
+            self.convert_results = self.converter_service.convert_downloaded_data(self.convert_download_results)
             
             # 统计结果
             successful_converts = sum(
@@ -463,15 +487,15 @@ class RulesetGenerator:
             if not self._load_and_validate_config():
                 return False
             
-            # 2. 下载阶段
+            # 2. 下载阶段（包括 rulesets 和 convert）
             if not self.download_phase():
                 return False
             
-            # 3. 处理阶段
+            # 3. 处理阶段（处理 rulesets）
             if not self.process_phase():
                 return False
             
-            # 4. 转换阶段
+            # 4. 转换阶段（转换 convert）
             if not self.convert_phase():
                 return False
             
@@ -514,7 +538,7 @@ class RulesetGenerator:
         Returns:
             下载统计字典
         """
-        return self.download_service.get_download_statistics(self.download_results)
+        return self.download_service.get_download_statistics(self.ruleset_download_results, self.convert_download_results)
     
     def get_processing_statistics(self) -> Dict[str, Any]:
         """
