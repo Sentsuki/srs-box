@@ -17,7 +17,7 @@
     "platform": "linux-amd64"
   },
   "logging": {
-    "level": "INFO",
+    "level": "SUCCESS",
     "enable_color": true,
     "show_progress": true
   },

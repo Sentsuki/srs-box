@@ -197,7 +197,12 @@ class RulesetGenerator:
                 self.summary.add_warning(f"部分数据源下载失败: {', '.join(failed_downloads)}")
             
             # 输出统计信息
-            self.logger.info(f"📊 下载统计:")
+            total_rulesets = len(self.download_results) + len(self.convert_download_results)
+            total_successful = successful_downloads + successful_convert_downloads
+            
+            self.logger.separator("统一下载阶段完成")
+            self.logger.success(f"✅ 下载完成: {total_successful}/{total_rulesets} 个源成功")
+            self.logger.info(f"📊 详细统计:")
             self.logger.info(f"   Rulesets: {successful_downloads}/{len(self.download_results)} 成功")
             if convert_config:
                 self.logger.info(f"   Convert: {successful_convert_downloads}/{len(self.convert_download_results)} 成功")
