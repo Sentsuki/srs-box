@@ -278,85 +278,44 @@ class DownloadService:
         
         return downloaded_data
     
-    def download_all_rulesets(self) -> Tuple[Dict[str, DownloadedData], Dict[str, DownloadedData]]:
+    def download_all_rulesets(self) -> Dict[str, DownloadedData]:
         """
-        下载所有规则集（包括 rulesets 和 convert）
+        下载所有规则集
         
         Returns:
-            (rulesets下载结果, convert下载结果)
+            规则集名称到下载数据的映射
         """
         rulesets = self.config_manager.get_rulesets()
-        convert_config = self.config_manager.get_convert_config()
-        
-        ruleset_results = {}
-        convert_results = {}
-        
-        total_count = len(rulesets) + len(convert_config)
+        results = {}
         
         self.logger.header("开始下载阶段")
-        self.logger.info(f"📋 发现 {len(rulesets)} 个rulesets规则集")
-        self.logger.info(f"📋 发现 {len(convert_config)} 个convert规则集")
-        self.logger.info(f"📋 总计 {total_count} 个规则集")
+        self.logger.info(f"📋 发现 {len(rulesets)} 个规则集")
         
-        current_index = 0
-        
-        # 下载 rulesets
-        if rulesets:
-            self.logger.info(f"\n🔄 开始下载 rulesets 规则集")
-            for ruleset_name, urls in rulesets.items():
-                current_index += 1
-                self.logger.step(f"下载rulesets规则集: {ruleset_name}", current_index, total_count)
+        for i, (ruleset_name, urls) in enumerate(rulesets.items(), 1):
+            self.logger.step(f"下载规则集: {ruleset_name}", i, len(rulesets))
+            
+            try:
+                downloaded_data = self.download_ruleset(ruleset_name, urls)
+                results[ruleset_name] = downloaded_data
                 
-                try:
-                    downloaded_data = self.download_ruleset(ruleset_name, urls)
-                    ruleset_results[ruleset_name] = downloaded_data
-                    
-                except Exception as e:
-                    self.logger.error(f"❌ 规则集 {ruleset_name} 下载异常: {str(e)}")
-                    # 创建失败的下载数据
-                    failed_data = DownloadedData(ruleset_name)
-                    failed_data.set_total_count(len(urls))
-                    failed_data.add_error(f"下载异常: {str(e)}")
-                    ruleset_results[ruleset_name] = failed_data
-                
-                # 添加分隔线（除了最后一个）
-                if current_index < total_count:
-                    self.logger.info("─" * 50)
-        
-        # 下载 convert
-        if convert_config:
-            self.logger.info(f"\n🔄 开始下载 convert 规则集")
-            for convert_name, urls in convert_config.items():
-                current_index += 1
-                self.logger.step(f"下载convert规则集: {convert_name}", current_index, total_count)
-                
-                try:
-                    downloaded_data = self.download_ruleset(convert_name, urls)
-                    convert_results[convert_name] = downloaded_data
-                    
-                except Exception as e:
-                    self.logger.error(f"❌ convert规则集 {convert_name} 下载异常: {str(e)}")
-                    # 创建失败的下载数据
-                    failed_data = DownloadedData(convert_name)
-                    failed_data.set_total_count(len(urls))
-                    failed_data.add_error(f"下载异常: {str(e)}")
-                    convert_results[convert_name] = failed_data
-                
-                # 添加分隔线（除了最后一个）
-                if current_index < total_count:
-                    self.logger.info("─" * 50)
+            except Exception as e:
+                self.logger.error(f"❌ 规则集 {ruleset_name} 下载异常: {str(e)}")
+                # 创建失败的下载数据
+                failed_data = DownloadedData(ruleset_name)
+                failed_data.set_total_count(len(urls))
+                failed_data.add_error(f"下载异常: {str(e)}")
+                results[ruleset_name] = failed_data
+            
+            # 添加分隔线（除了最后一个）
+            if i < len(rulesets):
+                self.logger.info("─" * 50)
         
         # 输出总体统计
-        successful_rulesets = sum(1 for data in ruleset_results.values() if data.is_successful())
-        successful_converts = sum(1 for data in convert_results.values() if data.is_successful())
-        total_successful = successful_rulesets + successful_converts
-        
+        successful_rulesets = sum(1 for data in results.values() if data.is_successful())
         self.logger.separator("下载阶段完成")
-        self.logger.success(f"✅ 下载完成: {total_successful}/{total_count} 个规则集成功")
-        self.logger.info(f"   - rulesets: {successful_rulesets}/{len(rulesets)} 成功")
-        self.logger.info(f"   - convert: {successful_converts}/{len(convert_config)} 成功")
+        self.logger.success(f"✅ 下载完成: {successful_rulesets}/{len(rulesets)} 个规则集成功")
         
-        return ruleset_results, convert_results
+        return results
     
     def cleanup_temp_files(self, keep_patterns: Optional[List[str]] = None) -> None:
         """
@@ -370,30 +329,23 @@ class DownloadService:
             if deleted_count > 0:
                 self.logger.info(f"🧹 已清理 {deleted_count} 个临时文件")
     
-    def get_download_statistics(self, ruleset_results: Dict[str, DownloadedData], 
-                               convert_results: Dict[str, DownloadedData] = None) -> Dict[str, Any]:
+    def get_download_statistics(self, results: Dict[str, DownloadedData]) -> Dict[str, Any]:
         """
-        获取下载统计信息（支持合并 rulesets 和 convert 统计）
+        获取下载统计信息
         
         Args:
-            ruleset_results: rulesets下载结果字典
-            convert_results: convert下载结果字典（可选）
+            results: 下载结果字典
             
         Returns:
             统计信息字典
         """
-        # 合并结果
-        all_results = dict(ruleset_results)
-        if convert_results:
-            all_results.update(convert_results)
+        total_rulesets = len(results)
+        successful_rulesets = sum(1 for data in results.values() if data.is_successful())
+        total_sources = sum(data.total_count for data in results.values())
+        successful_sources = sum(data.success_count for data in results.values())
         
-        total_rulesets = len(all_results)
-        successful_rulesets = sum(1 for data in all_results.values() if data.is_successful())
-        total_sources = sum(data.total_count for data in all_results.values())
-        successful_sources = sum(data.success_count for data in all_results.values())
-        
-        json_rulesets = sum(1 for data in all_results.values() if data.has_json_data())
-        text_rulesets = sum(1 for data in all_results.values() if data.has_text_files())
+        json_rulesets = sum(1 for data in results.values() if data.has_json_data())
+        text_rulesets = sum(1 for data in results.values() if data.has_text_files())
         
         return {
             'total_rulesets': total_rulesets,
@@ -402,7 +354,5 @@ class DownloadService:
             'successful_sources': successful_sources,
             'json_rulesets': json_rulesets,
             'text_rulesets': text_rulesets,
-            'success_rate': (successful_sources / total_sources * 100) if total_sources > 0 else 0,
-            'ruleset_count': len(ruleset_results),
-            'convert_count': len(convert_results) if convert_results else 0
+            'success_rate': (successful_sources / total_sources * 100) if total_sources > 0 else 0
         }

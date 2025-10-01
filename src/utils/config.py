@@ -233,14 +233,3 @@ class ConfigManager:
         default_output.update(user_output)
         
         return default_output
-    
-    def get_convert_config(self) -> Dict[str, List[str]]:
-        """
-        获取convert配置
-        
-        Returns:
-            convert配置字典，键为规则集名称，值为 URL 列表
-        """
-        if self._config is None:
-            self.load_config()
-        return self._config.get("convert", {})
