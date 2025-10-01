@@ -255,13 +255,12 @@ class CompilerService:
         
         return result
     
-    def compile_all_rulesets(self, process_results: Dict[str, ProcessedData], convert_results: Optional[Dict[str, Any]] = None) -> Dict[str, CompileResult]:
+    def compile_all_rulesets(self, process_results: Dict[str, ProcessedData]) -> Dict[str, CompileResult]:
         """
-        编译所有规则集（包括rulesets处理的和convert转换的）
+        编译所有规则集（现在process_results已包含所有数据）
         
         Args:
-            process_results: 处理结果字典
-            convert_results: 转换结果字典（可选）
+            process_results: 处理结果字典（包含rulesets和convert的所有数据）
             
         Returns:
             编译结果字典
@@ -273,19 +272,10 @@ class CompilerService:
         # 收集所有需要编译的JSON文件
         compile_tasks = {}
         
-        # 1. 收集rulesets处理生成的JSON文件
+        # 收集所有处理生成的JSON文件
         for name, data in process_results.items():
             if data.success and data.output_file:
                 compile_tasks[name] = data.output_file
-        
-        # 2. 收集convert转换生成的JSON文件
-        if convert_results:
-            for convert_name, convert_data in convert_results.items():
-                if convert_data.is_successful():
-                    for json_file in convert_data.json_files:
-                        # 修改task_name为convert_name（因为现在合并到一个文件）
-                        task_name = convert_name
-                        compile_tasks[task_name] = json_file
         
         if not compile_tasks:
             self.logger.warning("⚠️ 没有需要编译的JSON文件")
