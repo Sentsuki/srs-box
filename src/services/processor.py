@@ -4,7 +4,6 @@
 优化内存使用，支持大文件处理
 """
 
-import json
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple
 
@@ -510,7 +509,7 @@ class ProcessorService:
                             rule_types.append(f"{rule_type}({len(rule_values)})")
                             rule_count += len(rule_values)
 
-                self.logger.info(f"✅ JSON规则集处理完成")
+                self.logger.info("✅ JSON规则集处理完成")
                 self.logger.info(
                     f"📊 规则统计: {', '.join(rule_types)}，总计 {rule_count} 条规则"
                 )
@@ -539,7 +538,7 @@ class ProcessorService:
                             rule_types.append(f"{rule_type}({len(rule_values)})")
                             rule_count += len(rule_values)
 
-                self.logger.info(f"✅ 文本规则集处理完成")
+                self.logger.info("✅ 文本规则集处理完成")
                 self.logger.info(
                     f"📊 规则统计: {', '.join(rule_types)}，总计 {rule_count} 条规则"
                 )

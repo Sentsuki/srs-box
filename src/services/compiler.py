@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import tarfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional
 
 from ..utils.config import ConfigManager
 from ..utils.file_utils import FileUtils
@@ -81,7 +81,10 @@ class CompilerService:
         version = sing_box_config["version"]
         platform = sing_box_config["platform"]
 
-        return f"https://github.com/SagerNet/sing-box/releases/download/v{version}/sing-box-{version}-{platform}.tar.gz"
+        return (
+            f"https://github.com/SagerNet/sing-box/releases/download/"
+            f"v{version}/sing-box-{version}-{platform}.tar.gz"
+        )
 
     def _extract_sing_box(self, archive_path: Path) -> str:
         """
@@ -151,13 +154,12 @@ class CompilerService:
             download_url = self._get_sing_box_download_url()
             archive_path = self.temp_dir / "sing-box.tar.gz"
 
-            self.logger.info(f"📥 开始下载sing-box")
+            self.logger.info("📥 开始下载sing-box")
             self.logger.info(f"🔗 下载地址: {download_url}")
 
             # 下载文件
             def progress_callback(downloaded: int, total: int):
                 if total > 0:
-                    percentage = (downloaded * 100) // total
                     size_mb = downloaded / (1024 * 1024)
                     total_mb = total / (1024 * 1024)
                     self.logger.progress(

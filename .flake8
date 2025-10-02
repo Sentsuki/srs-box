@@ -1,5 +1,5 @@
 [flake8]
-max-line-length = 88  # 与 Black 一致
-extend-ignore = E203, W503  # 忽略 Black 不兼容的规则
-extend-exclude = venv/*, site-packages/*  # 跳过虚拟环境和 site-packages
-include = src/*.py, main.py  # 只检查 src 目录和 main.py
+max-line-length = 88
+extend-ignore = E203, W503
+extend-exclude = venv/*, site-packages/*
+include = src/*.py, main.py

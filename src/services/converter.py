@@ -6,12 +6,10 @@
 
 import json
 import re
-from io import StringIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
-import yaml
 
 from ..utils.config import ConfigManager
 from ..utils.file_utils import FileUtils
@@ -195,7 +193,7 @@ class ConverterService:
 
                     yaml_data = yaml.safe_load("\n".join(content))
                     df, logic_rules = self._parse_yaml_data(yaml_data)
-                except:
+                except Exception:
                     # 如果不是YAML，按文本列表处理
                     df, logic_rules = self._parse_text_list(content)
 

@@ -5,7 +5,6 @@
 
 import hashlib
 import json
-import os
 import threading
 import time
 import urllib.error
@@ -361,7 +360,6 @@ class NetworkUtils:
                 except OSError:
                     pass
 
-        last_error = None
         retry_delays = [
             retry_delay * (2**i) for i in range(max_retries + 1)
         ]  # 指数退避
@@ -380,8 +378,6 @@ class NetworkUtils:
                     return True
 
             except urllib.error.HTTPError as e:
-                last_error = f"HTTP {e.code}: {e.reason}"
-
                 # 对于某些HTTP错误码，不进行重试
                 if e.code in [400, 401, 403, 404, 410]:  # 客户端错误，不重试
                     break
@@ -393,9 +389,7 @@ class NetworkUtils:
                 else:
                     break
 
-            except urllib.error.URLError as e:
-                last_error = f"网络错误: {str(e.reason)}"
-
+            except urllib.error.URLError:
                 if attempt < max_retries:
                     delay = retry_delays[attempt]
                     time.sleep(delay)
@@ -403,9 +397,7 @@ class NetworkUtils:
                 else:
                     break
 
-            except Exception as e:
-                last_error = str(e)
-
+            except Exception:
                 if attempt < max_retries:
                     delay = retry_delays[attempt]
                     time.sleep(delay)
@@ -502,8 +494,6 @@ class NetworkUtils:
         Returns:
             JSON 数据字典，失败时返回 None
         """
-        last_error = None
-
         for attempt in range(max_retries + 1):
             try:
                 request = self._create_request(url)
@@ -517,9 +507,7 @@ class NetworkUtils:
                 urllib.error.HTTPError,
                 json.JSONDecodeError,
                 UnicodeDecodeError,
-            ) as e:
-                last_error = str(e)
-
+            ):
                 if attempt < max_retries:
                     time.sleep(retry_delay * (attempt + 1))
                     continue
@@ -542,8 +530,6 @@ class NetworkUtils:
         Returns:
             文本行列表，失败时返回 None
         """
-        last_error = None
-
         for attempt in range(max_retries + 1):
             try:
                 request = self._create_request(url)
@@ -556,9 +542,7 @@ class NetworkUtils:
                 urllib.error.URLError,
                 urllib.error.HTTPError,
                 UnicodeDecodeError,
-            ) as e:
-                last_error = str(e)
-
+            ):
                 if attempt < max_retries:
                     time.sleep(retry_delay * (attempt + 1))
                     continue
@@ -741,7 +725,7 @@ class NetworkUtils:
 
                 return info
 
-        except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        except (urllib.error.URLError, urllib.error.HTTPError):
             return None
 
     def is_url_accessible(self, url: str) -> bool:

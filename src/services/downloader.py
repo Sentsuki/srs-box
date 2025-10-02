@@ -4,16 +4,14 @@
 集成网络工具和文件工具，消除重复代码
 """
 
-import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from ..utils.config import ConfigManager
 from ..utils.file_utils import FileUtils
 from ..utils.logger import Logger
-from ..utils.network import DownloadResult, NetworkUtils
+from ..utils.network import NetworkUtils
 
 
 class DownloadedData:
@@ -131,7 +129,7 @@ class DownloadService:
             json_data = self.network_utils.download_json(url)
             if json_data:
                 json_data_list.append(json_data)
-                self.logger.info(f"✅ JSON规则集下载成功")
+                self.logger.info("✅ JSON规则集下载成功")
             else:
                 self.logger.warning(f"⚠️ JSON规则集下载失败: {url}")
 
@@ -212,11 +210,13 @@ class DownloadService:
         self.logger.info(
             f"✅ 文本文件下载完成: {stats['successful_files']}/{stats['total_files']} 成功"
         )
-        self.logger.info(f"📊 下载统计:")
+        self.logger.info("📊 下载统计:")
         self.logger.info(f"   • 成功率: {stats['success_rate']:.1f}%")
         self.logger.info(f"   • 总大小: {stats['total_size_mb']:.2f} MB")
         self.logger.info(f"   • 总耗时: {stats['total_time_seconds']:.1f} 秒")
-        self.logger.info(f"   • 平均速度: {stats['average_speed_mbps']:.2f} MB/s")
+        self.logger.info(
+            f"   • 平均速度: {stats['average_speed_mbps']:.2f} MB/s"
+        )
         self.logger.info(f"   • 并发数: {stats['max_concurrent']}")
 
         if stats["failed_files"] > 0:
@@ -252,7 +252,7 @@ class DownloadService:
 
         # 下载JSON规则集
         if json_urls:
-            self.logger.info(f"🔄 开始下载JSON规则集")
+            self.logger.info("🔄 开始下载JSON规则集")
             json_data_list = self.download_json_rulesets(json_urls)
 
             for json_data in json_data_list:
@@ -264,7 +264,7 @@ class DownloadService:
 
         # 下载文本规则集
         if text_urls:
-            self.logger.info(f"🔄 开始下载文本规则集")
+            self.logger.info("🔄 开始下载文本规则集")
 
             # 为每个规则集创建独立的临时目录
             ruleset_temp_dir = self.temp_dir / ruleset_name

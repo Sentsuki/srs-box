@@ -4,10 +4,8 @@
 实现统一的错误处理和状态管理
 """
 
-import os
-import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from .services.compiler import CompileResult, CompilerService
 from .services.converter import ConvertedData, ConverterService
@@ -57,7 +55,6 @@ class RulesetGenerator:
         self.config_manager = ConfigManager(config_path)
 
         # 加载配置并初始化日志系统
-        config = self.config_manager.load_config()
         logging_config = self.config_manager.get_logging_config()
 
         # 初始化日志系统
@@ -109,13 +106,13 @@ class RulesetGenerator:
         """
         try:
             self.logger.info("📋 正在加载配置文件...")
-            config = self.config_manager.load_config()
+            self.config_manager.load_config()
 
             rulesets = self.config_manager.get_rulesets()
             sing_box_config = self.config_manager.get_sing_box_config()
 
             self.logger.success("✅ 配置文件加载成功")
-            self.logger.info(f"📊 配置信息:")
+            self.logger.info("📊 配置信息:")
             self.logger.info(f"   规则集数量: {len(rulesets)}")
             self.logger.info(f"   sing-box版本: {sing_box_config['version']}")
             self.logger.info(f"   平台: {sing_box_config['platform']}")
@@ -219,13 +216,14 @@ class RulesetGenerator:
             self.logger.success(
                 f"✅ 下载完成: {total_successful}/{total_rulesets} 个源成功"
             )
-            self.logger.info(f"📊 详细统计:")
+            self.logger.info("📊 详细统计:")
             self.logger.info(
                 f"   Rulesets: {successful_downloads}/{len(self.download_results)} 成功"
             )
             if convert_config:
                 self.logger.info(
-                    f"   Convert: {successful_convert_downloads}/{len(self.convert_download_results)} 成功"
+                    f"   Convert: {successful_convert_downloads}/"
+                    f"{len(self.convert_download_results)} 成功"
                 )
 
             return True
@@ -455,7 +453,7 @@ class RulesetGenerator:
         self.logger.separator("执行摘要")
 
         # 基本统计
-        self.logger.info(f"📊 执行统计:")
+        self.logger.info("📊 执行统计:")
         self.logger.info(f"   总规则集数量: {self.summary.total_rulesets}")
         self.logger.info(f"   成功下载: {self.summary.successful_downloads}")
         self.logger.info(f"   成功处理: {self.summary.successful_processes}")
@@ -484,7 +482,8 @@ class RulesetGenerator:
                 self.convert_download_results
             )
             self.logger.info(
-                f"   Convert下载: {convert_download_stats['successful_sources']}/{convert_download_stats['total_sources']}"
+                f"   Convert下载: {convert_download_stats['successful_sources']}/"
+                f"{convert_download_stats['total_sources']}"
             )
 
         # 显示生成的文件
@@ -508,13 +507,13 @@ class RulesetGenerator:
                 f"🎉 规则集生成完成！成功生成 {self.summary.successful_compiles} 个规则集"
             )
         else:
-            self.logger.error(f"💥 规则集生成失败！没有成功生成任何规则集")
+            self.logger.error("💥 规则集生成失败！没有成功生成任何规则集")
 
     def _show_generated_files(self) -> None:
         """
         显示生成的文件信息
         """
-        self.logger.info(f"\n📁 生成的文件:")
+        self.logger.info("\n📁 生成的文件:")
 
         # 获取输出目录配置
         output_config = self.config_manager.get_output_config()
@@ -546,7 +545,7 @@ class RulesetGenerator:
 
         # 检查转换生成的文件
         if self.convert_results:
-            self.logger.info(f"\n📁 转换生成的JSON文件:")
+            self.logger.info("\n📁 转换生成的JSON文件:")
             for convert_name, convert_data in self.convert_results.items():
                 if convert_data.is_successful():
                     self.logger.info(f"   📂 {convert_name}:")
@@ -558,7 +557,7 @@ class RulesetGenerator:
 
         # 检查所有编译生成的SRS文件
         if self.compile_results:
-            self.logger.info(f"\n📁 编译生成的SRS文件:")
+            self.logger.info("\n📁 编译生成的SRS文件:")
             for task_name, compile_result in self.compile_results.items():
                 if compile_result.success and compile_result.output_file:
                     if Path(compile_result.output_file).exists():
