@@ -8,11 +8,11 @@ srs-box 规则集生成器主程序
 import sys
 from pathlib import Path
 
+from src.app import RulesetGenerator
+
 # 添加src目录到Python路径
 src_path = Path(__file__).parent / "src"
 sys.path.insert(0, str(src_path))
-
-from src.app import RulesetGenerator
 
 
 def main():
