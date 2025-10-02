@@ -472,7 +472,8 @@ class RulesetGenerator:
         if self.convert_results:
             convert_stats = self.get_convert_statistics()
             self.logger.info(
-                f"   转换规则集: {convert_stats['successful_converts']}/{convert_stats['total_converts']}"
+                f"   转换规则集: {convert_stats['successful_converts']}/"
+                f"{convert_stats['total_converts']}"
             )
             self.logger.info(f"   生成JSON文件: {convert_stats['total_json_files']}")
 

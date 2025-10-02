@@ -74,9 +74,6 @@ class DownloadProgress:
         with self.lock:
             # 计算当前总下载字节数
             current_downloaded = sum(prog[0] for prog in self.file_progresses.values())
-            current_total = sum(
-                prog[1] for prog in self.file_progresses.values() if prog[1] > 0
-            )
 
             elapsed_time = time.time() - self.start_time
             speed_mbps = 0.0

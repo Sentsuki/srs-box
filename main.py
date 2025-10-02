@@ -5,10 +5,10 @@ srs-box 规则集生成器主程序
 使用重构后的应用架构，提供统一的错误处理和日志输出
 """
 
-# 添加src目录到Python路径
 import sys
 from pathlib import Path
 
+# 添加src目录到Python路径
 src_path = Path(__file__).parent / "src"
 sys.path.insert(0, str(src_path))
 
