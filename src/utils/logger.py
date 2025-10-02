@@ -8,7 +8,6 @@ from datetime import datetime
 from enum import Enum
 
 
-
 class LogLevel(Enum):
     """日志级别枚举"""
 

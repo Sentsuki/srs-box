@@ -214,9 +214,7 @@ class DownloadService:
         self.logger.info(f"   • 成功率: {stats['success_rate']:.1f}%")
         self.logger.info(f"   • 总大小: {stats['total_size_mb']:.2f} MB")
         self.logger.info(f"   • 总耗时: {stats['total_time_seconds']:.1f} 秒")
-        self.logger.info(
-            f"   • 平均速度: {stats['average_speed_mbps']:.2f} MB/s"
-        )
+        self.logger.info(f"   • 平均速度: {stats['average_speed_mbps']:.2f} MB/s")
         self.logger.info(f"   • 并发数: {stats['max_concurrent']}")
 
         if stats["failed_files"] > 0:
