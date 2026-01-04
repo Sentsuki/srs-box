@@ -384,8 +384,13 @@ class ConverterService:
         for pattern, addresses in (
             df_filtered.groupby("pattern")["address"].apply(list).to_dict().items()
         ):
+            # 检查 pattern 是否在 MAP_DICT 中，不在则跳过
+            if pattern not in self.MAP_DICT:
+                self.logger.info(f"⏭️ 跳过不支持的规则类型: {pattern}")
+                continue
+            
             stripped = {str(addr).strip() for addr in addresses}  # set for dedup
-            mapped_pattern = self.MAP_DICT.get(pattern, pattern)  # 映射到标准类型
+            mapped_pattern = self.MAP_DICT[pattern]  # 映射到标准类型
 
             if mapped_pattern == "domain":
                 domain_entries.update(stripped)
