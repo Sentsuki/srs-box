@@ -169,10 +169,13 @@
   "convert": {
     "HTTPDNS": [
       "https://raw.githubusercontent.com/VirgilClyne/GetSomeFries/main/ruleset/HTTPDNS.Block.yaml"
+    ],
+    "OverseasAI": [
+      "https://raw.githubusercontent.com/viewer12/OverseasAI.list/main/rule/Clash/OverseasAI/OverseasAI.list"
     ]
   },
   "sing_box": {
-    "version": "1.12.8",
+    "version": "1.12.14",
     "platform": "linux-amd64"
   },
   "logging": {
