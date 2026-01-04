@@ -5,7 +5,7 @@
 """
 
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..utils.config import ConfigManager
 from ..utils.file_utils import FileUtils
@@ -339,100 +339,6 @@ class ProcessorService:
 
         return merged_ruleset
 
-    def create_ip_ruleset_from_text_files(
-        self, text_files: List[str], config_version: int
-    ) -> Dict[str, Any]:
-        """
-        从文本文件创建IP规则集，使用流式处理优化内存使用
-
-        Args:
-            text_files: 文本文件路径列表
-            config_version: 配置版本号
-
-        Returns:
-            IP规则集数据
-        """
-
-        # 使用生成器流式处理大文件，优化内存使用
-        def read_ip_lines_streaming() -> Generator[str, None, None]:
-            """流式读取IP行，逐行处理避免加载整个文件到内存"""
-            for file_path in text_files:
-                try:
-                    # 使用流式读取，一次只读取一行
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                        for line_num, line in enumerate(f, 1):
-                            cleaned_line = line.strip()
-                            if cleaned_line and not cleaned_line.startswith("#"):
-                                yield cleaned_line
-
-                            # 每处理1000行显示一次进度（对于大文件）
-                            if line_num % 1000 == 0:
-                                self.logger.info(
-                                    f"📖 处理文件 {Path(file_path).name}: {line_num} 行"
-                                )
-
-                except Exception as e:
-                    self.logger.warning(f"⚠️ 读取文件失败: {file_path} - {str(e)}")
-
-        # 使用集合进行内存高效的去重，分批处理避免内存峰值
-        ip_set = set()
-        batch_size = 10000  # 每批处理10000个IP
-        batch_count = 0
-
-        current_batch = []
-        for ip in read_ip_lines_streaming():
-            current_batch.append(ip)
-
-            # 当批次达到指定大小时，处理这一批
-            if len(current_batch) >= batch_size:
-                ip_set.update(current_batch)
-                current_batch.clear()  # 清空当前批次，释放内存
-                batch_count += 1
-
-                # 显示处理进度
-                self.logger.info(f"🔄 已处理 {batch_count * batch_size} 个IP地址")
-
-        # 处理最后一批
-        if current_batch:
-            ip_set.update(current_batch)
-            current_batch.clear()
-
-        # 转换为排序列表，分批排序以优化内存使用
-        self.logger.info(f"📊 去重后共有 {len(ip_set)} 个唯一IP地址")
-        self.logger.info("🔄 开始排序IP地址...")
-
-        # 对于大量IP，使用分块排序
-        if len(ip_set) > 50000:
-            # 分块处理大量数据
-            ip_list = []
-            chunk_size = 10000
-            ip_chunks = [
-                list(ip_set)[i : i + chunk_size]
-                for i in range(0, len(ip_set), chunk_size)
-            ]
-
-            for i, chunk in enumerate(ip_chunks, 1):
-                sorted_chunk = sorted(chunk)
-                ip_list.extend(sorted_chunk)
-                self.logger.info(f"🔄 排序进度: {i}/{len(ip_chunks)} 块")
-
-                # 清理已处理的块，释放内存
-                del chunk
-                del sorted_chunk
-        else:
-            # 小量数据直接排序
-            ip_list = sorted(list(ip_set))
-
-        # 清理集合，释放内存
-        del ip_set
-
-        # 创建规则集
-        ruleset = {"version": config_version, "rules": [{"ip_cidr": ip_list}]}
-
-        self.logger.info(f"✅ IP规则集创建完成，共 {len(ip_list)} 条规则")
-
-        return ruleset
-
     def process_ruleset(
         self, ruleset_name: str, downloaded_data: DownloadedData
     ) -> ProcessedData:
@@ -515,33 +421,12 @@ class ProcessorService:
                 )
 
             elif downloaded_data.has_text_files():
-                # 处理文本文件（IP列表）
-                self.logger.info(
-                    f"📄 处理文本文件: {len(downloaded_data.text_files)} 个"
+                # 纯文本IP列表应由 IpProcessorService 处理，这里跳过
+                self.logger.warning(
+                    "⚠️ 发现文本文件但 ProcessorService 不处理纯IP列表，请使用 IpProcessorService"
                 )
-
-                ruleset_data = self.create_ip_ruleset_from_text_files(
-                    downloaded_data.text_files, config_version
-                )
-
-                # 清理文本文件列表，释放内存
-                downloaded_data.text_files.clear()
-
-                # 统计IP数量
-                rule_count = 0
-                rule_types = []
-                filtered_count = 0
-
-                for rule in ruleset_data.get("rules", []):
-                    for rule_type, rule_values in rule.items():
-                        if isinstance(rule_values, list):
-                            rule_types.append(f"{rule_type}({len(rule_values)})")
-                            rule_count += len(rule_values)
-
-                self.logger.info("✅ 文本规则集处理完成")
-                self.logger.info(
-                    f"📊 规则统计: {', '.join(rule_types)}，总计 {rule_count} 条规则"
-                )
+                processed_data.set_error("文本IP列表应由 IpProcessorService 处理")
+                return processed_data
 
             else:
                 # 没有可处理的数据

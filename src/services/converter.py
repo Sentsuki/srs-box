@@ -142,7 +142,7 @@ class ConverterService:
         self.logger.separator("convert组 转换阶段完成")
         success = stats["successful_converts"]
         total = stats["total_converts"]
-        self.logger.success(f"✅ convert组 转换完成: {success}/{total} 个规则集成功")
+        self.logger.success(f"✅ convert组 转换完成: {success}/{total} 个成功")
 
         return results
 
