@@ -139,9 +139,9 @@ class ConverterService:
 
         # 输出总体统计
         stats = self.get_convert_statistics(results)
-        self.logger.separator("转换阶段完成")
+        self.logger.separator("convert组 转换阶段完成")
         self.logger.success(
-            f"✅ 转换完成: {stats['successful_converts']}/{stats['total_converts']} 个规则集成功"
+            f"✅ convert组 转换完成: {stats['successful_converts']}/{stats['total_converts']} 个规则集成功"
         )
 
         return results

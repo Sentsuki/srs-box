@@ -273,9 +273,9 @@ class IpProcessorService:
         successful_processed = sum(1 for data in results.values() if data.success)
         total_ips = sum(data.ip_count for data in results.values() if data.success)
 
-        self.logger.separator("IP规则集处理阶段完成")
+        self.logger.separator("IP组 处理阶段完成")
         self.logger.success(
-            f"✅ IP规则集处理完成: {successful_processed}/{len(successful_downloads)} 个成功"
+            f"✅ IP组 处理完成: {successful_processed}/{len(successful_downloads)} 个成功"
         )
         self.logger.info(f"📊 总IP数量: {total_ips} 条")
 

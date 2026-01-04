@@ -222,60 +222,60 @@ class DownloadService:
 
         return successful_files
 
-    def download_ruleset(self, ruleset_name: str, urls: List[str]) -> DownloadedData:
+    def download_ruleset(
+        self, ruleset_name: str, urls: List[str], download_as: str = "json"
+    ) -> DownloadedData:
         """
         下载单个规则集的所有数据源
 
         Args:
             ruleset_name: 规则集名称
             urls: URL列表
+            download_as: 下载类型
+                - 'json': 所有链接按 JSON 下载（适用于 rulesets 配置）
+                - 'text': 所有链接按文本文件下载（适用于 ip_only 和 convert 配置）
 
         Returns:
             下载数据结果
         """
         self.logger.info(f"📥 开始下载规则集: {ruleset_name}")
-        self.logger.info(f"📋 数据源数量: {len(urls)}")
+        self.logger.info(f"📋 数据源数量: {len(urls)}, 模式: {download_as}")
 
         # 创建下载结果对象
         downloaded_data = DownloadedData(ruleset_name)
         downloaded_data.set_total_count(len(urls))
 
-        # 分类URL
-        json_urls = [url for url in urls if self.is_json_ruleset(url)]
-        text_urls = [url for url in urls if not self.is_json_ruleset(url)]
-
-        self.logger.info(
-            f"📊 JSON规则集: {len(json_urls)} 个, 文本规则集: {len(text_urls)} 个"
-        )
-
-        # 下载JSON规则集
-        if json_urls:
+        if download_as == "json":
+            # JSON 模式：所有链接按 JSON 下载
             self.logger.info("🔄 开始下载JSON规则集")
-            json_data_list = self.download_json_rulesets(json_urls)
+            json_data_list = self.download_json_rulesets(urls)
 
             for json_data in json_data_list:
                 downloaded_data.add_json_data(json_data)
 
-            if len(json_data_list) != len(json_urls):
-                failed_json = len(json_urls) - len(json_data_list)
+            if len(json_data_list) != len(urls):
+                failed_json = len(urls) - len(json_data_list)
                 downloaded_data.add_error(f"{failed_json} 个JSON规则集下载失败")
 
-        # 下载文本规则集
-        if text_urls:
+        elif download_as == "text":
+            # 文本模式：所有链接按文本文件下载
             self.logger.info("🔄 开始下载文本规则集")
 
             # 为每个规则集创建独立的临时目录
             ruleset_temp_dir = self.temp_dir / ruleset_name
             self.file_utils.ensure_dir(ruleset_temp_dir)
 
-            text_files = self.download_text_rulesets(text_urls, ruleset_temp_dir)
+            text_files = self.download_text_rulesets(urls, ruleset_temp_dir)
 
             for file_path in text_files:
                 downloaded_data.add_text_file(file_path)
 
-            if len(text_files) != len(text_urls):
-                failed_text = len(text_urls) - len(text_files)
+            if len(text_files) != len(urls):
+                failed_text = len(urls) - len(text_files)
                 downloaded_data.add_error(f"{failed_text} 个文本文件下载失败")
+
+        else:
+            downloaded_data.add_error(f"不支持的下载模式: {download_as}")
 
         # 输出下载结果摘要
         if downloaded_data.is_successful():

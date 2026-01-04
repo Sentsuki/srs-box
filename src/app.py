@@ -288,9 +288,9 @@ class RulesetGenerator:
             self.logger.info(f"📥 下载 IP 规则集: {ip_name}")
 
             try:
-                # 使用 download_service 下载 IP 的源文件
+                # 使用 download_service 下载 IP 的源文件（按文本模式下载）
                 downloaded_data = self.download_service.download_ruleset(
-                    f"ip_{ip_name}", urls
+                    f"ip_{ip_name}", urls, download_as="text"
                 )
                 results[ip_name] = downloaded_data
 
@@ -322,9 +322,9 @@ class RulesetGenerator:
             self.logger.info(f"📥 下载 JSON 规则集: {ruleset_name}")
 
             try:
-                # 使用 download_service 下载规则集的源文件
+                # 使用 download_service 下载规则集的源文件（按 JSON 模式下载）
                 downloaded_data = self.download_service.download_ruleset(
-                    ruleset_name, urls
+                    ruleset_name, urls, download_as="json"
                 )
                 results[ruleset_name] = downloaded_data
 
@@ -356,9 +356,9 @@ class RulesetGenerator:
             self.logger.info(f"📥 下载 convert 配置: {convert_name}")
 
             try:
-                # 使用 download_service 下载 convert 的源文件
+                # 使用 download_service 下载 convert 的源文件（按文本模式下载）
                 downloaded_data = self.download_service.download_ruleset(
-                    f"convert_{convert_name}", urls
+                    f"convert_{convert_name}", urls, download_as="text"
                 )
                 results[convert_name] = downloaded_data
 
