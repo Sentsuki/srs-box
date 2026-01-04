@@ -57,26 +57,43 @@ class ConfigManager:
             raise ValueError("配置文件根节点必须是对象")
 
         # 检查必需的字段
-        required_fields = ["rulesets", "sing_box", "version"]
+        required_fields = ["sing_box", "version"]
         for field in required_fields:
             if field not in self._config:
                 raise ValueError(f"配置文件缺少必需字段: {field}")
 
-        # 验证 rulesets 字段
-        rulesets = self._config.get("rulesets")
-        if not isinstance(rulesets, dict):
-            raise ValueError("rulesets 字段必须是对象")
+        # 验证 ip_only 字段（可选）
+        if "ip_only" in self._config:
+            ip_only = self._config.get("ip_only")
+            if not isinstance(ip_only, dict):
+                raise ValueError("ip_only 字段必须是对象")
+            for name, urls in ip_only.items():
+                if not isinstance(name, str):
+                    raise ValueError(f"IP规则集名称必须是字符串: {name}")
+                if not isinstance(urls, list):
+                    raise ValueError(f"IP规则集 {name} 的 URL 列表必须是数组")
+                if not urls:
+                    raise ValueError(f"IP规则集 {name} 的 URL 列表不能为空")
+                for url in urls:
+                    if not isinstance(url, str):
+                        raise ValueError(f"IP规则集 {name} 中的 URL 必须是字符串: {url}")
 
-        for name, urls in rulesets.items():
-            if not isinstance(name, str):
-                raise ValueError(f"规则集名称必须是字符串: {name}")
-            if not isinstance(urls, list):
-                raise ValueError(f"规则集 {name} 的 URL 列表必须是数组")
-            if not urls:
-                raise ValueError(f"规则集 {name} 的 URL 列表不能为空")
-            for url in urls:
-                if not isinstance(url, str):
-                    raise ValueError(f"规则集 {name} 中的 URL 必须是字符串: {url}")
+        # 验证 rulesets 字段（可选）
+        if "rulesets" in self._config:
+            rulesets = self._config.get("rulesets")
+            if not isinstance(rulesets, dict):
+                raise ValueError("rulesets 字段必须是对象")
+
+            for name, urls in rulesets.items():
+                if not isinstance(name, str):
+                    raise ValueError(f"规则集名称必须是字符串: {name}")
+                if not isinstance(urls, list):
+                    raise ValueError(f"规则集 {name} 的 URL 列表必须是数组")
+                if not urls:
+                    raise ValueError(f"规则集 {name} 的 URL 列表不能为空")
+                for url in urls:
+                    if not isinstance(url, str):
+                        raise ValueError(f"规则集 {name} 中的 URL 必须是字符串: {url}")
 
         # 验证 sing_box 字段
         sing_box = self._config.get("sing_box")
@@ -116,7 +133,18 @@ class ConfigManager:
         """
         if self._config is None:
             self.load_config()
-        return self._config["rulesets"]
+        return self._config.get("rulesets", {})
+
+    def get_ip_only(self) -> Dict[str, List[str]]:
+        """
+        获取 IP 规则集配置
+
+        Returns:
+            IP规则集字典，键为规则集名称，值为 URL 列表
+        """
+        if self._config is None:
+            self.load_config()
+        return self._config.get("ip_only", {})
 
     def get_sing_box_config(self) -> Dict[str, str]:
         """

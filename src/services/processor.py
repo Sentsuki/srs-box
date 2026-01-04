@@ -641,9 +641,9 @@ class ProcessorService:
 
         # 输出总体统计
         successful_processed = sum(1 for data in results.values() if data.success)
-        self.logger.separator("处理阶段完成")
+        self.logger.separator("ruleset组 处理阶段完成")
         self.logger.success(
-            f"✅ 处理完成: {successful_processed}/{len(successful_downloads)} 个规则集成功"
+            f"✅ ruleset组 处理完成: {successful_processed}/{len(successful_downloads)} 个成功"
         )
 
         return results

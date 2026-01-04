@@ -1,5 +1,5 @@
 {
-  "rulesets": {
+  "ip_only": {
     "cn_ip": [
       "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cernet.txt",
       "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cernet6.txt",
@@ -16,7 +16,9 @@
     ],
     "telegram_ip": [
       "https://core.telegram.org/resources/cidr.txt"
-    ],
+    ]
+  },
+  "rulesets": {
     "data_skype": [
       "https://github.com/Sentsuki/srs-box/raw/refs/heads/main/data/Skype.json"
     ],
