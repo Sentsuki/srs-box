@@ -192,9 +192,18 @@ class ConverterService:
                     import yaml
 
                     yaml_data = yaml.safe_load("\n".join(content))
-                    df, logic_rules = self._parse_yaml_data(yaml_data)
+                    
+                    # 检查 YAML 解析结果是否为有效结构（dict 或 list）
+                    # 如果 yaml.safe_load 返回字符串，说明文件不是标准 YAML 结构
+                    # （例如 Clash .list 格式文件会被解析为单行字符串）
+                    if isinstance(yaml_data, (dict, list)):
+                        df, logic_rules = self._parse_yaml_data(yaml_data)
+                    else:
+                        # 不是有效的 YAML 结构，按文本列表处理
+                        self.logger.info("📝 检测到非 YAML 结构格式，使用文本列表解析")
+                        df, logic_rules = self._parse_text_list(content)
                 except Exception:
-                    # 如果不是YAML，按文本列表处理
+                    # 如果 YAML 解析失败，按文本列表处理
                     df, logic_rules = self._parse_text_list(content)
 
                 # 收集逻辑规则
@@ -307,7 +316,13 @@ class ConverterService:
         """
         from io import StringIO
 
-        csv_data = StringIO("\n".join(content))
+        # 过滤掉注释行（以 # 开头）和空行
+        filtered_content = [
+            line for line in content 
+            if line.strip() and not line.strip().startswith("#")
+        ]
+
+        csv_data = StringIO("\n".join(filtered_content))
         df = pd.read_csv(
             csv_data,
             header=None,
