@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 from .services.compiler import CompileResult, CompilerService
 from .services.converter import ConvertedData, ConverterService
 from .services.downloader import DownloadedData, DownloadService
+from .services.ip_processor import IpProcessedData, IpProcessorService
 from .services.processor import ProcessedData, ProcessorService
 from .utils.config import ConfigManager
 from .utils.file_utils import FileUtils
@@ -84,13 +85,20 @@ class RulesetGenerator:
         self.converter_service = ConverterService(
             self.config_manager, self.logger, self.network_utils, self.file_utils
         )
+        self.ip_processor_service = IpProcessorService(
+            self.config_manager, self.logger, self.file_utils
+        )
 
         # 执行结果存储
         self.download_results: Dict[str, DownloadedData] = {}
         self.convert_download_results: Dict[str, DownloadedData] = (
             {}
-        )  # 新增：convert下载结果
+        )  # convert下载结果
+        self.ip_download_results: Dict[str, DownloadedData] = (
+            {}
+        )  # ip_only下载结果
         self.process_results: Dict[str, ProcessedData] = {}
+        self.ip_process_results: Dict[str, IpProcessedData] = {}  # IP处理结果
         self.compile_results: Dict[str, CompileResult] = {}
         self.convert_results: Dict[str, ConvertedData] = {}
 
@@ -108,20 +116,30 @@ class RulesetGenerator:
             self.logger.info("📋 正在加载配置文件...")
             self.config_manager.load_config()
 
+            ip_only = self.config_manager.get_ip_only()
             rulesets = self.config_manager.get_rulesets()
             sing_box_config = self.config_manager.get_sing_box_config()
 
             self.logger.success("✅ 配置文件加载成功")
             self.logger.info("📊 配置信息:")
-            self.logger.info(f"   规则集数量: {len(rulesets)}")
+            self.logger.info(f"   IP规则集数量: {len(ip_only)}")
+            self.logger.info(f"   JSON规则集数量: {len(rulesets)}")
             self.logger.info(f"   sing-box版本: {sing_box_config['version']}")
             self.logger.info(f"   平台: {sing_box_config['platform']}")
 
-            # 显示规则集详情
-            for name, urls in rulesets.items():
-                self.logger.info(f"   - {name}: {len(urls)} 个数据源")
+            # 显示 IP 规则集详情
+            if ip_only:
+                self.logger.info("   🌐 IP规则集:")
+                for name, urls in ip_only.items():
+                    self.logger.info(f"      - {name}: {len(urls)} 个数据源")
 
-            self.summary.total_rulesets = len(rulesets)
+            # 显示JSON规则集详情
+            if rulesets:
+                self.logger.info("   📄 JSON规则集:")
+                for name, urls in rulesets.items():
+                    self.logger.info(f"      - {name}: {len(urls)} 个数据源")
+
+            self.summary.total_rulesets = len(ip_only) + len(rulesets)
             return True
 
         except FileNotFoundError:
@@ -136,7 +154,7 @@ class RulesetGenerator:
 
     def download_phase(self) -> bool:
         """
-        统一下载阶段 - 同时下载所有 rulesets 和 convert 链接
+        统一下载阶段 - 同时下载 ip_only、rulesets 和 convert 链接
 
         Returns:
             是否有成功的下载
@@ -144,17 +162,30 @@ class RulesetGenerator:
         try:
             self.logger.separator("开始统一下载阶段")
 
-            # 1. 下载 rulesets
-            self.logger.info("🔄 下载 rulesets 配置")
-            self.download_results = self.download_service.download_all_rulesets()
-
-            # 2. 下载 convert 配置（如果存在）
             config = self.config_manager.load_config()
-            convert_config = config.get("convert", {})
 
+            # 1. 下载 ip_only 配置
+            ip_only_config = config.get("ip_only", {})
+            if ip_only_config:
+                self.logger.info("🌐 下载 ip_only 配置")
+                self.ip_download_results = self._download_ip_sources(ip_only_config)
+            else:
+                self.logger.info("📋 没有 ip_only 配置，跳过")
+                self.ip_download_results = {}
+
+            # 2. 下载 rulesets 配置
+            rulesets_config = config.get("rulesets", {})
+            if rulesets_config:
+                self.logger.info("📄 下载 rulesets 配置")
+                self.download_results = self._download_rulesets_sources(rulesets_config)
+            else:
+                self.logger.info("📋 没有 rulesets 配置，跳过")
+                self.download_results = {}
+
+            # 3. 下载 convert 配置
+            convert_config = config.get("convert", {})
             if convert_config:
                 self.logger.info("🔄 下载 convert 配置")
-                # 使用 converter_service 的下载功能，但不进行转换
                 self.convert_download_results = self._download_convert_sources(
                     convert_config
                 )
@@ -162,26 +193,21 @@ class RulesetGenerator:
                 self.logger.info("📋 没有 convert 配置，跳过")
                 self.convert_download_results = {}
 
-            # 统计 rulesets 下载结果
-            successful_downloads = sum(
+            # 统计下载结果
+            successful_ip = sum(
+                1 for data in self.ip_download_results.values() if data.is_successful()
+            )
+            successful_rulesets = sum(
                 1 for data in self.download_results.values() if data.is_successful()
             )
-
-            # 统计 convert 下载结果
-            successful_convert_downloads = (
-                sum(
-                    1
-                    for data in self.convert_download_results.values()
-                    if data.is_successful()
-                )
-                if self.convert_download_results
-                else 0
+            successful_convert = sum(
+                1 for data in self.convert_download_results.values() if data.is_successful()
             )
 
-            self.summary.successful_downloads = successful_downloads
+            total_successful = successful_ip + successful_rulesets + successful_convert
+            self.summary.successful_downloads = total_successful
 
             # 检查是否有成功的下载
-            total_successful = successful_downloads + successful_convert_downloads
             if total_successful == 0:
                 self.logger.error("❌ 没有成功下载任何数据源")
                 self.summary.add_error("没有成功下载任何数据源")
@@ -189,6 +215,12 @@ class RulesetGenerator:
 
             # 记录失败的下载
             failed_downloads = []
+            for name, data in self.ip_download_results.items():
+                if not data.is_successful():
+                    failed_downloads.append(f"ip_only:{name}")
+                    for error in data.errors:
+                        self.summary.add_warning(f"IP规则集 {name}: {error}")
+
             for name, data in self.download_results.items():
                 if not data.is_successful():
                     failed_downloads.append(f"ruleset:{name}")
@@ -207,23 +239,28 @@ class RulesetGenerator:
                 )
 
             # 输出统计信息
-            total_rulesets = len(self.download_results) + len(
-                self.convert_download_results
+            total_sources = (
+                len(self.ip_download_results)
+                + len(self.download_results)
+                + len(self.convert_download_results)
             )
-            total_successful = successful_downloads + successful_convert_downloads
 
             self.logger.separator("统一下载阶段完成")
             self.logger.success(
-                f"✅ 下载完成: {total_successful}/{total_rulesets} 个源成功"
+                f"✅ 下载完成: {total_successful}/{total_sources} 个源成功"
             )
             self.logger.info("📊 详细统计:")
-            self.logger.info(
-                f"   Rulesets: {successful_downloads}/{len(self.download_results)} 成功"
-            )
+            if ip_only_config:
+                self.logger.info(
+                    f"   IP规则集: {successful_ip}/{len(self.ip_download_results)} 成功"
+                )
+            if rulesets_config:
+                self.logger.info(
+                    f"   JSON规则集: {successful_rulesets}/{len(self.download_results)} 成功"
+                )
             if convert_config:
                 self.logger.info(
-                    f"   Convert: {successful_convert_downloads}/"
-                    f"{len(self.convert_download_results)} 成功"
+                    f"   Convert: {successful_convert}/{len(self.convert_download_results)} 成功"
                 )
 
             return True
@@ -232,6 +269,74 @@ class RulesetGenerator:
             self.logger.error(f"❌ 统一下载阶段异常: {str(e)}")
             self.summary.add_error(f"统一下载阶段异常: {str(e)}")
             return False
+
+    def _download_ip_sources(
+        self, ip_config: Dict[str, List[str]]
+    ) -> Dict[str, DownloadedData]:
+        """
+        下载 ip_only 配置中的所有源文件
+
+        Args:
+            ip_config: ip_only 配置字典
+
+        Returns:
+            IP规则集名称到下载数据的映射
+        """
+        results = {}
+
+        for ip_name, urls in ip_config.items():
+            self.logger.info(f"📥 下载 IP 规则集: {ip_name}")
+
+            try:
+                # 使用 download_service 下载 IP 的源文件
+                downloaded_data = self.download_service.download_ruleset(
+                    f"ip_{ip_name}", urls
+                )
+                results[ip_name] = downloaded_data
+
+            except Exception as e:
+                self.logger.error(f"❌ IP 规则集 {ip_name} 下载异常: {str(e)}")
+                # 创建失败的下载数据
+                failed_data = DownloadedData(f"ip_{ip_name}")
+                failed_data.set_total_count(len(urls))
+                failed_data.add_error(f"下载异常: {str(e)}")
+                results[ip_name] = failed_data
+
+        return results
+
+    def _download_rulesets_sources(
+        self, rulesets_config: Dict[str, List[str]]
+    ) -> Dict[str, DownloadedData]:
+        """
+        下载 rulesets 配置中的所有源文件
+
+        Args:
+            rulesets_config: rulesets 配置字典
+
+        Returns:
+            规则集名称到下载数据的映射
+        """
+        results = {}
+
+        for ruleset_name, urls in rulesets_config.items():
+            self.logger.info(f"📥 下载 JSON 规则集: {ruleset_name}")
+
+            try:
+                # 使用 download_service 下载规则集的源文件
+                downloaded_data = self.download_service.download_ruleset(
+                    ruleset_name, urls
+                )
+                results[ruleset_name] = downloaded_data
+
+            except Exception as e:
+                self.logger.error(f"❌ 规则集 {ruleset_name} 下载异常: {str(e)}")
+                # 创建失败的下载数据
+                failed_data = DownloadedData(ruleset_name)
+                failed_data.set_total_count(len(urls))
+                failed_data.add_error(f"下载异常: {str(e)}")
+                results[ruleset_name] = failed_data
+
+        return results
 
     def _download_convert_sources(
         self, convert_config: Dict[str, List[str]]
@@ -269,13 +374,18 @@ class RulesetGenerator:
 
     def process_phase(self) -> bool:
         """
-        执行处理阶段
+        执行JSON规则集处理阶段
 
         Returns:
             是否有成功的处理
         """
         try:
-            self.logger.separator("开始处理阶段")
+            # 如果没有 rulesets 下载结果，跳过此阶段
+            if not self.download_results:
+                self.logger.info("📋 没有JSON规则集需要处理，跳过")
+                return True
+
+            self.logger.separator("开始JSON规则集处理阶段")
 
             # 执行处理
             self.process_results = self.processor_service.process_all_rulesets(
@@ -290,8 +400,8 @@ class RulesetGenerator:
             self.summary.successful_processes = successful_processes
 
             if successful_processes == 0:
-                self.logger.error("❌ 没有成功处理任何规则集")
-                self.summary.add_error("没有成功处理任何规则集")
+                self.logger.error("❌ 没有成功处理任何JSON规则集")
+                self.summary.add_error("没有成功处理任何JSON规则集")
                 return False
 
             # 统计规则数量
@@ -318,8 +428,66 @@ class RulesetGenerator:
             return True
 
         except Exception as e:
-            self.logger.error(f"❌ 处理阶段异常: {str(e)}")
-            self.summary.add_error(f"处理阶段异常: {str(e)}")
+            self.logger.error(f"❌ JSON规则集处理阶段异常: {str(e)}")
+            self.summary.add_error(f"JSON规则集处理阶段异常: {str(e)}")
+            return False
+
+    def ip_process_phase(self) -> bool:
+        """
+        执行IP规则集处理阶段
+
+        Returns:
+            是否有成功的处理
+        """
+        try:
+            # 如果没有 ip_only 下载结果，跳过此阶段
+            if not self.ip_download_results:
+                self.logger.info("📋 没有IP规则集需要处理，跳过")
+                return True
+
+            self.logger.separator("开始IP规则集处理阶段")
+
+            # 执行IP处理
+            self.ip_process_results = self.ip_processor_service.process_all_ip_rulesets(
+                self.ip_download_results
+            )
+
+            # 统计结果
+            successful_ip_processes = sum(
+                1 for data in self.ip_process_results.values() if data.success
+            )
+
+            if successful_ip_processes == 0:
+                self.logger.error("❌ 没有成功处理任何IP规则集")
+                self.summary.add_error("没有成功处理任何IP规则集")
+                return False
+
+            # 统计IP数量
+            total_ips = sum(
+                data.ip_count
+                for data in self.ip_process_results.values()
+                if data.success
+            )
+            self.summary.total_rules += total_ips
+
+            # 记录失败的处理
+            failed_processes = []
+            for name, data in self.ip_process_results.items():
+                if not data.success:
+                    failed_processes.append(name)
+                    if data.error:
+                        self.summary.add_warning(f"IP规则集 {name}: {data.error}")
+
+            if failed_processes:
+                self.summary.add_warning(
+                    f"部分IP规则集处理失败: {', '.join(failed_processes)}"
+                )
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"❌ IP规则集处理阶段异常: {str(e)}")
+            self.summary.add_error(f"IP规则集处理阶段异常: {str(e)}")
             return False
 
     def compile_phase(self) -> bool:
@@ -332,9 +500,9 @@ class RulesetGenerator:
         try:
             self.logger.separator("开始编译阶段")
 
-            # 执行编译（包括rulesets处理的和convert转换的JSON文件）
+            # 执行编译（包括rulesets处理的、convert转换的和ip_only处理的JSON文件）
             self.compile_results = self.compiler_service.compile_all_rulesets(
-                self.process_results, self.convert_results
+                self.process_results, self.convert_results, self.ip_process_results
             )
 
             # 统计结果
@@ -579,33 +747,37 @@ class RulesetGenerator:
             # 显示启动信息
             self.logger.separator()
             self.logger.info("🌏 srs-box 规则集生成器启动")
-            self.logger.info("优化流程：统一下载所有数据源 → 处理 → 转换 → 编译")
+            self.logger.info("优化流程：下载 → IP处理 → JSON处理 → 转换 → 编译")
             self.logger.separator()
 
             # 1. 加载配置
             if not self._load_and_validate_config():
                 return False
 
-            # 2. 统一下载阶段（同时下载 rulesets 和 convert）
+            # 2. 统一下载阶段（同时下载 ip_only、rulesets 和 convert）
             if not self.download_phase():
                 return False
 
-            # 3. 处理阶段（处理 rulesets）
+            # 3. IP处理阶段（处理 ip_only）
+            if not self.ip_process_phase():
+                return False
+
+            # 4. JSON处理阶段（处理 rulesets）
             if not self.process_phase():
                 return False
 
-            # 4. 转换阶段（转换 convert）
+            # 5. 转换阶段（转换 convert）
             if not self.convert_phase():
                 return False
 
-            # 5. 编译阶段（编译所有规则集）
+            # 6. 编译阶段（编译所有规则集）
             if not self.compile_phase():
                 return False
 
-            # 6. 清理阶段
+            # 7. 清理阶段
             self.cleanup_phase()
 
-            # 7. 显示摘要
+            # 8. 显示摘要
             self.show_summary()
 
             # 判断整体是否成功

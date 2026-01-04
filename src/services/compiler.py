@@ -267,15 +267,17 @@ class CompilerService:
 
     def compile_all_rulesets(
         self,
-        process_results: Dict[str, ProcessedData],
+        process_results: Optional[Dict[str, ProcessedData]] = None,
         convert_results: Optional[Dict[str, Any]] = None,
+        ip_process_results: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, CompileResult]:
         """
-        编译所有规则集（包括rulesets处理的和convert转换的）
+        编译所有规则集（包括rulesets处理的、convert转换的和ip_only处理的）
 
         Args:
-            process_results: 处理结果字典
+            process_results: JSON规则集处理结果字典（可选）
             convert_results: 转换结果字典（可选）
+            ip_process_results: IP规则集处理结果字典（可选）
 
         Returns:
             编译结果字典
@@ -288,9 +290,10 @@ class CompilerService:
         compile_tasks = {}
 
         # 1. 收集rulesets处理生成的JSON文件
-        for name, data in process_results.items():
-            if data.success and data.output_file:
-                compile_tasks[name] = data.output_file
+        if process_results:
+            for name, data in process_results.items():
+                if data.success and data.output_file:
+                    compile_tasks[name] = data.output_file
 
         # 2. 收集convert转换生成的JSON文件
         if convert_results:
@@ -300,6 +303,12 @@ class CompilerService:
                         # 修改task_name为convert_name（因为现在合并到一个文件）
                         task_name = convert_name
                         compile_tasks[task_name] = json_file
+
+        # 3. 收集ip_only处理生成的JSON文件
+        if ip_process_results:
+            for name, data in ip_process_results.items():
+                if data.success and data.output_file:
+                    compile_tasks[name] = data.output_file
 
         if not compile_tasks:
             self.logger.warning("⚠️ 没有需要编译的JSON文件")
