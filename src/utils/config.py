@@ -76,7 +76,9 @@ class ConfigManager:
                     raise ValueError(f"IP规则集 {name} 的 URL 列表不能为空")
                 for url in urls:
                     if not isinstance(url, str):
-                        raise ValueError(f"IP规则集 {name} 中的 URL 必须是字符串: {url}")
+                        raise ValueError(
+                            f"IP规则集 {name} 中的 URL 必须是字符串: {url}"
+                        )
 
         # 验证 rulesets 字段（可选）
         if "rulesets" in self._config:

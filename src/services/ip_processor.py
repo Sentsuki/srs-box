@@ -177,9 +177,7 @@ class IpProcessorService:
                 processed_data.set_error("没有可处理的文本文件")
                 return processed_data
 
-            self.logger.info(
-                f"📄 处理文本文件: {len(downloaded_data.text_files)} 个"
-            )
+            self.logger.info(f"📄 处理文本文件: {len(downloaded_data.text_files)} 个")
 
             ruleset_data = self.create_ip_ruleset_from_text_files(
                 downloaded_data.text_files, config_version

@@ -91,12 +91,8 @@ class RulesetGenerator:
 
         # 执行结果存储
         self.download_results: Dict[str, DownloadedData] = {}
-        self.convert_download_results: Dict[str, DownloadedData] = (
-            {}
-        )  # convert下载结果
-        self.ip_download_results: Dict[str, DownloadedData] = (
-            {}
-        )  # ip_only下载结果
+        self.convert_download_results: Dict[str, DownloadedData] = {}  # convert下载结果
+        self.ip_download_results: Dict[str, DownloadedData] = {}  # ip_only下载结果
         self.process_results: Dict[str, ProcessedData] = {}
         self.ip_process_results: Dict[str, IpProcessedData] = {}  # IP处理结果
         self.compile_results: Dict[str, CompileResult] = {}
@@ -201,7 +197,9 @@ class RulesetGenerator:
                 1 for data in self.download_results.values() if data.is_successful()
             )
             successful_convert = sum(
-                1 for data in self.convert_download_results.values() if data.is_successful()
+                1
+                for data in self.convert_download_results.values()
+                if data.is_successful()
             )
 
             total_successful = successful_ip + successful_rulesets + successful_convert
@@ -259,8 +257,9 @@ class RulesetGenerator:
                     f"   JSON规则集: {successful_rulesets}/{len(self.download_results)} 成功"
                 )
             if convert_config:
+                convert_total = len(self.convert_download_results)
                 self.logger.info(
-                    f"   Convert: {successful_convert}/{len(self.convert_download_results)} 成功"
+                    f"   Convert: {successful_convert}/{convert_total} 成功"
                 )
 
             return True

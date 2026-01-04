@@ -140,9 +140,9 @@ class ConverterService:
         # 输出总体统计
         stats = self.get_convert_statistics(results)
         self.logger.separator("convert组 转换阶段完成")
-        self.logger.success(
-            f"✅ convert组 转换完成: {stats['successful_converts']}/{stats['total_converts']} 个规则集成功"
-        )
+        success = stats["successful_converts"]
+        total = stats["total_converts"]
+        self.logger.success(f"✅ convert组 转换完成: {success}/{total} 个规则集成功")
 
         return results
 
@@ -192,7 +192,7 @@ class ConverterService:
                     import yaml
 
                     yaml_data = yaml.safe_load("\n".join(content))
-                    
+
                     # 检查 YAML 解析结果是否为有效结构（dict 或 list）
                     # 如果 yaml.safe_load 返回字符串，说明文件不是标准 YAML 结构
                     # （例如 Clash .list 格式文件会被解析为单行字符串）
@@ -318,7 +318,8 @@ class ConverterService:
 
         # 过滤掉注释行（以 # 开头）和空行
         filtered_content = [
-            line for line in content 
+            line
+            for line in content
             if line.strip() and not line.strip().startswith("#")
         ]
 
@@ -388,7 +389,7 @@ class ConverterService:
             if pattern not in self.MAP_DICT:
                 self.logger.info(f"⏭️ 跳过不支持的规则类型: {pattern}")
                 continue
-            
+
             stripped = {str(addr).strip() for addr in addresses}  # set for dedup
             mapped_pattern = self.MAP_DICT[pattern]  # 映射到标准类型
 
