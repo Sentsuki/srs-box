@@ -19,6 +19,9 @@
     ]
   },
   "rulesets": {
+    "data_apple_ai": [
+      "https://github.com/Sentsuki/srs-box/raw/refs/heads/main/data/Apple_Intelligence.json"
+    ],
     "data_skype": [
       "https://github.com/Sentsuki/srs-box/raw/refs/heads/main/data/Skype.json"
     ],
