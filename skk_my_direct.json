@@ -1,0 +1,15 @@
+{
+  "version": 3,
+  "rules": [
+    {
+      "domain_suffix": [
+        "torrentmac.net",
+        "engage.cloudflareclient.com",
+        "download.555mac.com"
+      ],
+      "domain_keyword": [
+        "mac-torrent-download"
+      ]
+    }
+  ]
+}
