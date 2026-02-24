@@ -177,6 +177,9 @@
     ],
     "OverseasAI": [
       "https://raw.githubusercontent.com/viewer12/OverseasAI.list/main/rule/Clash/OverseasAI/OverseasAI.list"
+    ],
+    "Riot": [
+      "https://github.com/LM-Firefly/Rules/raw/refs/heads/master/Game/Riot.list"
     ]
   },
   "sing_box": {
