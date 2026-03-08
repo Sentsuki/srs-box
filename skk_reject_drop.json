@@ -1,0 +1,38 @@
+{
+  "version": 3,
+  "rules": [
+    {
+      "domain": [
+        "stats.grafana.org",
+        "nom.telemetrydeck.com",
+        "stat.youpin.mi.com"
+      ],
+      "domain_suffix": [
+        "undefined",
+        "null",
+        "telemetry.mozilla.org",
+        "getui.net",
+        "easytomessage.com",
+        "data.grammarly.com",
+        "slackb.com",
+        "gepush.com",
+        "getui.com",
+        "in.applicationinsights.azure.com",
+        "geo2.adobe.com",
+        "tracking.miui.com",
+        "tracking.intl.miui.com",
+        "beacon.qq.com",
+        "trace.qq.com",
+        "f-log-extension.grammarly.io",
+        "f-log-assistant.grammarly.io",
+        "femetrics.grammarly.io",
+        "jpush.io",
+        "femetrics.qagr.io",
+        "jpush.cn"
+      ],
+      "domain_regex": [
+        "^f-log[\\w.-]*?\\.grammarly\\.io$"
+      ]
+    }
+  ]
+}

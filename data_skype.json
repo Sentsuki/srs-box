@@ -1,0 +1,15 @@
+{
+  "rules": [
+    {
+      "domain_suffix": [
+        "cloudapp.net",
+        "lync.com",
+        "sfbassets.com",
+        "skype.com",
+        "skypeassets.com",
+        "skypeforbusiness.com"
+      ]
+    }
+  ],
+  "version": 3
+}
