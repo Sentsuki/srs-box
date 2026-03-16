@@ -177,7 +177,7 @@
     ]
   },
   "sing_box": {
-    "version": "1.12.14",
+    "version": "1.13.3",
     "platform": "linux-amd64"
   },
   "logging": {
@@ -189,5 +189,5 @@
     "json_dir": "output/json",
     "srs_dir": "output/srs"
   },
-  "version": 3
+  "version": 4
 }
