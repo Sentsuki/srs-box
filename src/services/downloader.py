@@ -14,6 +14,14 @@ from ..utils.logger import Logger
 from ..utils.network import NetworkUtils
 
 
+def _make_failed_download(name: str, urls: List[str], reason: str) -> "DownloadedData":
+    """创建一个表示失败的 DownloadedData 对象（内部辅助函数）"""
+    data = DownloadedData(name)
+    data.set_total_count(len(urls))
+    data.add_error(reason)
+    return data
+
+
 class DownloadedData:
     """下载数据结果类"""
 
@@ -354,6 +362,90 @@ class DownloadService:
             )
             if deleted_count > 0:
                 self.logger.info(f"🧹 已清理 {deleted_count} 个临时文件")
+
+    def download_ip_sources(
+        self, ip_config: Dict[str, List[str]]
+    ) -> Dict[str, "DownloadedData"]:
+        """
+        下载 ip_only 配置中的所有源文件
+
+        Args:
+            ip_config: ip_only 配置字典，键为规则集名称，值为 URL 列表
+
+        Returns:
+            IP规则集名称到下载数据的映射
+        """
+        results: Dict[str, DownloadedData] = {}
+
+        for ip_name, urls in ip_config.items():
+            self.logger.info(f"📥 下载 IP 规则集: {ip_name}")
+            try:
+                results[ip_name] = self.download_ruleset(
+                    f"ip_{ip_name}", urls, download_as="text"
+                )
+            except Exception as e:
+                self.logger.error(f"❌ IP 规则集 {ip_name} 下载异常: {str(e)}")
+                results[ip_name] = _make_failed_download(
+                    f"ip_{ip_name}", urls, f"下载异常: {str(e)}"
+                )
+
+        return results
+
+    def download_rulesets_sources(
+        self, rulesets_config: Dict[str, List[str]]
+    ) -> Dict[str, "DownloadedData"]:
+        """
+        下载 rulesets 配置中的所有源文件
+
+        Args:
+            rulesets_config: rulesets 配置字典，键为规则集名称，值为 URL 列表
+
+        Returns:
+            规则集名称到下载数据的映射
+        """
+        results: Dict[str, DownloadedData] = {}
+
+        for ruleset_name, urls in rulesets_config.items():
+            self.logger.info(f"📥 下载 JSON 规则集: {ruleset_name}")
+            try:
+                results[ruleset_name] = self.download_ruleset(
+                    ruleset_name, urls, download_as="json"
+                )
+            except Exception as e:
+                self.logger.error(f"❌ 规则集 {ruleset_name} 下载异常: {str(e)}")
+                results[ruleset_name] = _make_failed_download(
+                    ruleset_name, urls, f"下载异常: {str(e)}"
+                )
+
+        return results
+
+    def download_convert_sources(
+        self, convert_config: Dict[str, List[str]]
+    ) -> Dict[str, "DownloadedData"]:
+        """
+        下载 convert 配置中的所有源文件
+
+        Args:
+            convert_config: convert 配置字典，键为名称，值为 URL 列表
+
+        Returns:
+            convert 名称到下载数据的映射
+        """
+        results: Dict[str, DownloadedData] = {}
+
+        for convert_name, urls in convert_config.items():
+            self.logger.info(f"📥 下载 convert 配置: {convert_name}")
+            try:
+                results[convert_name] = self.download_ruleset(
+                    f"convert_{convert_name}", urls, download_as="text"
+                )
+            except Exception as e:
+                self.logger.error(f"❌ Convert 配置 {convert_name} 下载异常: {str(e)}")
+                results[convert_name] = _make_failed_download(
+                    f"convert_{convert_name}", urls, f"下载异常: {str(e)}"
+                )
+
+        return results
 
     def get_download_statistics(
         self, results: Dict[str, DownloadedData]

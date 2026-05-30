@@ -6,10 +6,9 @@
 
 import json
 import re
+from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
-
-import pandas as pd
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..utils.config import ConfigManager
 from ..utils.file_utils import FileUtils
@@ -73,7 +72,7 @@ class ConverterService:
         self.file_utils = file_utils
 
         # 映射字典 - 从原有convert.py移植
-        self.MAP_DICT = {
+        self.MAP_DICT: Dict[str, str] = {
             "DOMAIN-SUFFIX": "domain_suffix",
             "HOST-SUFFIX": "domain_suffix",
             "host-suffix": "domain_suffix",
@@ -127,17 +126,14 @@ class ConverterService:
 
             except Exception as e:
                 self.logger.error(f"❌ 规则集 {convert_name} 转换异常: {str(e)}")
-                # 创建失败的转换数据
                 failed_data = ConvertedData(convert_name)
                 failed_data.set_total_count(download_data.total_count)
                 failed_data.add_error(f"转换异常: {str(e)}")
                 results[convert_name] = failed_data
 
-            # 添加分隔线（除了最后一个）
             if i < len(download_results):
                 self.logger.info("─" * 50)
 
-        # 输出总体统计
         stats = self.get_convert_statistics(results)
         self.logger.separator("convert组 转换阶段完成")
         success = stats["successful_converts"]
@@ -161,7 +157,6 @@ class ConverterService:
         """
         self.logger.info(f"🔄 转换已下载的规则集: {convert_name}")
 
-        # 创建转换结果对象
         converted_data = ConvertedData(convert_name)
         converted_data.set_total_count(download_data.total_count)
 
@@ -169,49 +164,23 @@ class ConverterService:
             converted_data.add_error("源数据下载失败")
             return converted_data
 
-        # 获取输出目录配置
         output_config = self.config_manager.get_output_config()
         json_dir = Path(output_config["json_dir"])
         self.file_utils.ensure_dir(json_dir)
 
-        # 初始化合并结构
-        merged_by_type = {}  # pattern -> set of stripped addresses (for dedup)
-        all_logic_rules = []  # 收集所有逻辑规则
-        domain_entries = set()  # 单独收集domain，用于去重并插入开头
+        # merged_by_type: mapped_pattern -> set of values (for dedup)
+        merged_by_type: Dict[str, Set[str]] = defaultdict(set)
+        all_logic_rules: List[Dict] = []
+        domain_entries: Set[str] = set()
 
-        # 处理文本文件
         for text_file in download_data.text_files:
             try:
                 self.logger.info(f"🔄 处理文本文件: {Path(text_file).name}")
-
-                # 读取文件内容并解析
                 content = self.file_utils.read_text_file(text_file)
 
-                # 尝试解析为YAML
-                try:
-                    import yaml
-
-                    yaml_data = yaml.safe_load("\n".join(content))
-
-                    # 检查 YAML 解析结果是否为有效结构（dict 或 list）
-                    # 如果 yaml.safe_load 返回字符串，说明文件不是标准 YAML 结构
-                    # （例如 Clash .list 格式文件会被解析为单行字符串）
-                    if isinstance(yaml_data, (dict, list)):
-                        df, logic_rules = self._parse_yaml_data(yaml_data)
-                    else:
-                        # 不是有效的 YAML 结构，按文本列表处理
-                        self.logger.info("📝 检测到非 YAML 结构格式，使用文本列表解析")
-                        df, logic_rules = self._parse_text_list(content)
-                except Exception:
-                    # 如果 YAML 解析失败，按文本列表处理
-                    df, logic_rules = self._parse_text_list(content)
-
-                # 收集逻辑规则
+                rows, logic_rules = self._parse_content(content)
                 all_logic_rules.extend(logic_rules)
-
-                # 处理DataFrame数据
-                if df is not None and not df.empty:
-                    self._merge_dataframe_to_rules(df, merged_by_type, domain_entries)
+                self._merge_rows_to_rules(rows, merged_by_type, domain_entries)
 
                 converted_data.success_count += 1
 
@@ -223,182 +192,163 @@ class ConverterService:
                     f"文件处理失败: {Path(text_file).name} - {str(e)}"
                 )
 
-        # 如果有成功处理的数据，构建合并的规则集
-        if merged_by_type or all_logic_rules or domain_entries:
-            merged_ruleset = {"version": self.config_manager.get_version(), "rules": []}
-
-            # 添加非domain规则
-            for pattern, values in merged_by_type.items():
-                if values:
-                    sorted_values = sorted(list(values))
-                    merged_ruleset["rules"].append({pattern: sorted_values})
-
-            # 添加domain（插入开头，去重）
-            if domain_entries:
-                sorted_domains = sorted(list(domain_entries))
-                merged_ruleset["rules"].insert(0, {"domain": sorted_domains})
-
-            # 添加逻辑规则（追加到末尾）
-            merged_ruleset["rules"].extend(all_logic_rules)
-
-            # 生成文件名
-            file_name = json_dir / f"{convert_name}.json"
-
-            # 写入JSON文件
-            with open(file_name, "w", encoding="utf-8") as output_file:
-                result_rules_str = json.dumps(
-                    self.sort_dict(merged_ruleset), ensure_ascii=False, indent=2
-                )
-                result_rules_str = result_rules_str.replace("\\\\", "\\")
-                output_file.write(result_rules_str)
-
-            converted_data.add_converted_file(str(file_name), "")
-            self.logger.info(f"✅ 转换完成: {file_name}")
-        else:
+        if not merged_by_type and not all_logic_rules and not domain_entries:
             self.logger.error(f"❌ 规则集 {convert_name} 无有效数据")
+            return converted_data
+
+        merged_ruleset: Dict[str, Any] = {
+            "version": self.config_manager.get_version(),
+            "rules": [],
+        }
+
+        # domain 插入开头
+        if domain_entries:
+            merged_ruleset["rules"].append({"domain": sorted(domain_entries)})
+
+        # 其余规则类型
+        for pattern, values in merged_by_type.items():
+            if values:
+                merged_ruleset["rules"].append({pattern: sorted(values)})
+
+        # 逻辑规则追加到末尾
+        merged_ruleset["rules"].extend(all_logic_rules)
+
+        file_name = json_dir / f"{convert_name}.json"
+        with open(file_name, "w", encoding="utf-8") as output_file:
+            result_str = json.dumps(
+                self._sort_dict(merged_ruleset), ensure_ascii=False, indent=2
+            )
+            result_str = result_str.replace("\\\\", "\\")
+            output_file.write(result_str)
+
+        converted_data.add_converted_file(str(file_name), "")
+        self.logger.info(f"✅ 转换完成: {file_name}")
 
         return converted_data
 
-    def _parse_yaml_data(
-        self, yaml_data: Any
-    ) -> Tuple[Optional[pd.DataFrame], List[Dict]]:
+    def _parse_content(
+        self, content: List[str]
+    ) -> Tuple[List[Tuple[str, str]], List[Dict]]:
         """
-        解析YAML数据
+        解析文件内容，自动识别 YAML payload 格式或纯文本列表格式。
 
         Args:
-            yaml_data: YAML数据
+            content: 文件行列表
 
         Returns:
-            (DataFrame数据, 逻辑规则列表)
+            (rows, logic_rules)
+            rows: List of (pattern, address) tuples
+            logic_rules: List of logical rule dicts
         """
-        rows = []
-        if not isinstance(yaml_data, str):
-            items = (
-                yaml_data.get("payload", [])
-                if isinstance(yaml_data, dict)
-                else yaml_data
-            )
+        # 尝试 YAML 解析
+        try:
+            import yaml
+
+            yaml_data = yaml.safe_load("\n".join(content))
+            if isinstance(yaml_data, (dict, list)):
+                return self._parse_yaml_data(yaml_data)
+        except Exception:
+            pass
+
+        # 回退到纯文本列表解析
+        self.logger.info("📝 检测到非 YAML 结构格式，使用文本列表解析")
+        return self._parse_text_list(content)
+
+    def _parse_yaml_data(
+        self, yaml_data: Any
+    ) -> Tuple[List[Tuple[str, str]], List[Dict]]:
+        """
+        解析 YAML 数据（dict 或 list）。
+
+        Returns:
+            (rows, logic_rules)
+        """
+        rows: List[Tuple[str, str]] = []
+
+        if isinstance(yaml_data, dict):
+            items = yaml_data.get("payload", [])
         else:
-            items = yaml_data.splitlines()
+            items = yaml_data
 
         for item in items:
             if isinstance(item, str):
-                # 简单处理，假设每行是一个pattern:address对
                 parts = item.split(",", 1)
                 if len(parts) == 2:
-                    rows.append(
-                        {"pattern": parts[0].strip(), "address": parts[1].strip()}
-                    )
+                    rows.append((parts[0].strip(), parts[1].strip()))
                 else:
-                    rows.append({"pattern": "domain", "address": item.strip()})
+                    rows.append(("domain", item.strip()))
             elif isinstance(item, dict):
                 for key, value in item.items():
                     if isinstance(value, list):
                         for v in value:
-                            rows.append({"pattern": key, "address": v})
+                            rows.append((str(key), str(v)))
                     else:
-                        rows.append({"pattern": key, "address": value})
+                        rows.append((str(key), str(value)))
 
-        df = pd.DataFrame(rows) if rows else None
-        return df, []  # YAML通常没有逻辑规则
+        return rows, []
 
     def _parse_text_list(
         self, content: List[str]
-    ) -> Tuple[Optional[pd.DataFrame], List[Dict]]:
+    ) -> Tuple[List[Tuple[str, str]], List[Dict]]:
         """
-        解析文本列表数据
-
-        Args:
-            content: 文本内容行列表
+        解析 Clash .list 格式的纯文本规则列表。
 
         Returns:
-            (DataFrame数据, 逻辑规则列表)
+            (rows, logic_rules)
         """
-        from io import StringIO
+        rows: List[Tuple[str, str]] = []
+        logic_rules: List[Dict] = []
 
-        # 过滤掉注释行（以 # 开头）和空行
-        filtered_content = [
-            line
-            for line in content
-            if line.strip() and not line.strip().startswith("#")
-        ]
+        for line in content:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
 
-        csv_data = StringIO("\n".join(filtered_content))
-        df = pd.read_csv(
-            csv_data,
-            header=None,
-            names=["pattern", "address", "other", "other2", "other3"],
-            on_bad_lines="skip",
-        )
-
-        filtered_rows = []
-        rules = []
-
-        # 处理逻辑规则
-        if "AND" in df["pattern"].values:
-            and_rows = df[df["pattern"].str.contains("AND", na=False)]
-            for _, row in and_rows.iterrows():
-                rule = {"type": "logical", "mode": "and", "rules": []}
-                pattern = ",".join(row.values.astype(str))
-                components = re.findall(r"\((.*?)\)", pattern)
+            # 处理 AND 逻辑规则
+            if line.startswith("AND,"):
+                rule: Dict[str, Any] = {"type": "logical", "mode": "and", "rules": []}
+                components = re.findall(r"\((.*?)\)", line)
                 for component in components:
-                    for keyword in self.MAP_DICT.keys():
-                        if keyword in component:
-                            match = re.search(f"{keyword},(.*)", component)
-                            if match:
-                                value = match.group(1)
-                                rule["rules"].append({self.MAP_DICT[keyword]: value})
-                rules.append(rule)
+                    for keyword, mapped in self.MAP_DICT.items():
+                        if component.startswith(keyword + ","):
+                            value = component[len(keyword) + 1:]
+                            rule["rules"].append({mapped: value})
+                            break
+                logic_rules.append(rule)
+                continue
 
-        for index, row in df.iterrows():
-            if "AND" not in row["pattern"]:
-                filtered_rows.append(row)
+            parts = line.split(",", 2)
+            if len(parts) >= 2:
+                rows.append((parts[0].strip(), parts[1].strip()))
 
-        df_filtered = pd.DataFrame(
-            filtered_rows, columns=["pattern", "address", "other", "other2", "other3"]
-        )
-        return df_filtered, rules
+        return rows, logic_rules
 
-    def _merge_dataframe_to_rules(
-        self, df: pd.DataFrame, merged_by_type: Dict, domain_entries: set
+    def _merge_rows_to_rules(
+        self,
+        rows: List[Tuple[str, str]],
+        merged_by_type: Dict[str, Set[str]],
+        domain_entries: Set[str],
     ) -> None:
         """
-        将DataFrame数据合并到规则集中
+        将解析出的 (pattern, address) 行合并到规则集中。
 
         Args:
-            df: 要处理的DataFrame
-            merged_by_type: 按类型分组的规则字典
-            domain_entries: domain条目集合
+            rows: 解析出的行列表
+            merged_by_type: 按映射类型分组的规则字典（原地修改）
+            domain_entries: domain 条目集合（原地修改）
         """
-        # 过滤掉包含AND的行
-        filtered_rows = []
-        for index, row in df.iterrows():
-            if "AND" not in str(row.get("pattern", "")):
-                filtered_rows.append(row)
-
-        if not filtered_rows:
-            return
-
-        df_filtered = pd.DataFrame(filtered_rows)
-
-        # 按pattern分组并合并
-        for pattern, addresses in (
-            df_filtered.groupby("pattern")["address"].apply(list).to_dict().items()
-        ):
-            # 检查 pattern 是否在 MAP_DICT 中，不在则跳过
+        for pattern, address in rows:
             if pattern not in self.MAP_DICT:
                 self.logger.info(f"⏭️ 跳过不支持的规则类型: {pattern}")
                 continue
 
-            stripped = {str(addr).strip() for addr in addresses}  # set for dedup
-            mapped_pattern = self.MAP_DICT[pattern]  # 映射到标准类型
+            mapped = self.MAP_DICT[pattern]
+            value = address.strip()
 
-            if mapped_pattern == "domain":
-                domain_entries.update(stripped)
+            if mapped == "domain":
+                domain_entries.add(value)
             else:
-                if mapped_pattern not in merged_by_type:
-                    merged_by_type[mapped_pattern] = set()
-                merged_by_type[mapped_pattern].update(stripped)
+                merged_by_type[mapped].add(value)
 
     def get_convert_statistics(
         self, results: Dict[str, ConvertedData]
@@ -431,7 +381,7 @@ class ConverterService:
             ),
         }
 
-    def sort_dict(self, data: Dict) -> Dict:
+    def _sort_dict(self, data: Any) -> Any:
         """
         递归排序字典（保持原有逻辑）
 
@@ -442,11 +392,10 @@ class ConverterService:
             排序后的字典
         """
         if isinstance(data, dict):
-            return {k: self.sort_dict(v) for k, v in sorted(data.items())}
+            return {k: self._sort_dict(v) for k, v in sorted(data.items())}
         elif isinstance(data, list):
             return [
-                self.sort_dict(item) if isinstance(item, (dict, list)) else item
+                self._sort_dict(item) if isinstance(item, (dict, list)) else item
                 for item in data
             ]
-        else:
-            return data
+        return data

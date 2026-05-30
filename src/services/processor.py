@@ -445,8 +445,6 @@ class ProcessorService:
             json_dir = output_config["json_dir"]
 
             # 确保输出目录存在
-            from pathlib import Path
-
             json_path = Path(json_dir)
             json_path.mkdir(parents=True, exist_ok=True)
 
