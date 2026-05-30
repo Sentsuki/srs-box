@@ -117,34 +117,11 @@ class IpProcessorService:
             ip_set.update(current_batch)
             current_batch.clear()
 
-        # 转换为排序列表，分批排序以优化内存使用
         self.logger.info(f"📊 去重后共有 {len(ip_set)} 个唯一IP地址")
         self.logger.info("🔄 开始排序IP地址...")
 
-        # 对于大量IP，使用分块排序
-        if len(ip_set) > 50000:
-            # 分块处理大量数据
-            ip_list: List[str] = []
-            chunk_size = 10000
-            ip_chunks = [
-                list(ip_set)[i : i + chunk_size]
-                for i in range(0, len(ip_set), chunk_size)
-            ]
-
-            for i, chunk in enumerate(ip_chunks, 1):
-                sorted_chunk = sorted(chunk)
-                ip_list.extend(sorted_chunk)
-                self.logger.info(f"🔄 排序进度: {i}/{len(ip_chunks)} 块")
-
-                # 清理已处理的块，释放内存
-                del chunk
-                del sorted_chunk
-        else:
-            # 小量数据直接排序
-            ip_list = sorted(list(ip_set))
-
-        # 清理集合，释放内存
-        del ip_set
+        ip_list: List[str] = sorted(ip_set)
+        del ip_set  # 释放集合内存
 
         # 创建规则集
         ruleset = {"version": config_version, "rules": [{"ip_cidr": ip_list}]}

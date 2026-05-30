@@ -203,18 +203,6 @@ class NetworkUtils:
         """
         output_path = Path(output_path)
 
-        # 文件已存在且可读则跳过
-        if output_path.exists() and output_path.stat().st_size > 0:
-            try:
-                with open(output_path, "rb") as f:
-                    f.read(1)
-                return True
-            except OSError:
-                try:
-                    output_path.unlink()
-                except OSError:
-                    pass
-
         retry_delays = [retry_delay * (2**i) for i in range(max_retries + 1)]
 
         for attempt in range(max_retries + 1):

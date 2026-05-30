@@ -158,7 +158,7 @@ class CompilerService:
             self.logger.info(f"🔗 下载地址: {download_url}")
 
             # 下载文件
-            def progress_callback(downloaded: int, total: int):
+            def progress_callback(file_id: str, downloaded: int, total: int) -> None:
                 if total > 0:
                     size_mb = downloaded / (1024 * 1024)
                     total_mb = total / (1024 * 1024)

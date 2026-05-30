@@ -205,13 +205,11 @@ class DownloadService:
 
         # 收集成功下载的文件
         successful_files = []
-        failed_urls = []
 
         for result in results:
             if result.success:
                 successful_files.append(result.file_path)
             else:
-                failed_urls.append(result.url)
                 self.logger.warning(f"⚠️ 文件下载失败: {result.url} - {result.error}")
 
         # 显示详细的下载统计

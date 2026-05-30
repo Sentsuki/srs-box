@@ -89,7 +89,7 @@ class ProcessorService:
         self, rules: List[Dict[str, Any]]
     ) -> Tuple[List[Dict[str, Any]], int]:
         """
-        过滤规则列表，移除包含特定关键字的规则，使用内存优化的流式处理
+        过滤规则列表，移除包含特定关键字的规则值。
 
         Args:
             rules: 规则列表
@@ -100,93 +100,43 @@ class ProcessorService:
         filtered_rules = []
         filtered_count = 0
 
-        # 分批处理规则，避免内存峰值
-        batch_size = 100
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
 
-        for batch_start in range(0, len(rules), batch_size):
-            batch_end = min(batch_start + batch_size, len(rules))
-            rule_batch = rules[batch_start:batch_end]
-
-            for rule in rule_batch:
-                if not isinstance(rule, dict):
+            filtered_rule = {}
+            for rule_type, rule_values in rule.items():
+                if not isinstance(rule_values, list):
                     continue
 
-                filtered_rule = {}
+                kept = [v for v in rule_values if not self.should_filter_rule_value(v)]
+                filtered_count += len(rule_values) - len(kept)
+                if kept:
+                    filtered_rule[rule_type] = kept
 
-                for rule_type, rule_values in rule.items():
-                    if not isinstance(rule_values, list):
-                        continue
-
-                    # 分批过滤规则值，避免大量规则值同时在内存中
-                    original_count = len(rule_values)
-                    filtered_values = []
-
-                    value_batch_size = 1000
-                    for value_start in range(0, len(rule_values), value_batch_size):
-                        value_end = min(
-                            value_start + value_batch_size, len(rule_values)
-                        )
-                        value_batch = rule_values[value_start:value_end]
-
-                        # 过滤当前批次的值
-                        batch_filtered = [
-                            value
-                            for value in value_batch
-                            if not self.should_filter_rule_value(value)
-                        ]
-                        filtered_values.extend(batch_filtered)
-
-                        # 清理已处理的批次
-                        del value_batch
-                        del batch_filtered
-
-                    filtered_count += original_count - len(filtered_values)
-
-                    # 只添加非空的规则
-                    if filtered_values:
-                        filtered_rule[rule_type] = filtered_values
-
-                # 只添加非空的规则对象
-                if filtered_rule:
-                    filtered_rules.append(filtered_rule)
-
-            # 显示处理进度（对于大规则集）
-            if batch_end % 1000 == 0:
-                self.logger.info(f"🔄 过滤进度: {batch_end}/{len(rules)} 规则")
+            if filtered_rule:
+                filtered_rules.append(filtered_rule)
 
         return filtered_rules, filtered_count
 
     def cleanup_temporary_data(self) -> None:
-        """
-        清理临时数据和文件，释放内存
-        """
+        """清理临时文件（.tmp），不触发 GC。"""
         try:
-            # 清理临时文件
             temp_dir = Path("temp")
-            if temp_dir.exists():
-                # 清理处理过程中的临时文件
-                for temp_file in temp_dir.glob("*.tmp"):
+            if not temp_dir.exists():
+                return
+            for temp_file in temp_dir.glob("*.tmp"):
+                try:
+                    temp_file.unlink()
+                except OSError:
+                    pass
+            # 清理空子目录
+            for subdir in temp_dir.iterdir():
+                if subdir.is_dir():
                     try:
-                        temp_file.unlink()
+                        subdir.rmdir()
                     except OSError:
                         pass
-
-                # 清理空的子目录
-                for subdir in temp_dir.iterdir():
-                    if subdir.is_dir():
-                        try:
-                            # 如果目录为空，删除它
-                            subdir.rmdir()
-                        except OSError:
-                            pass  # 目录不为空或无法删除
-
-            # 强制垃圾回收
-            import gc
-
-            gc.collect()
-
-            self.logger.info("🧹 临时数据清理完成")
-
         except Exception as e:
             self.logger.warning(f"⚠️ 清理临时数据时出错: {str(e)}")
 
@@ -299,37 +249,12 @@ class ProcessorService:
 
         for rule_type in rule_types_to_process:
             rule_values = rule_groups[rule_type]
-            if rule_values:  # 只添加非空的规则
+            if rule_values:
                 self.logger.info(
                     f"🔄 排序规则类型 {rule_type}: {len(rule_values)} 条规则"
                 )
-
-                # 对于大量规则，使用分块排序
-                if len(rule_values) > 10000:
-                    # 分块处理大量数据
-                    sorted_values = []
-                    chunk_size = 5000
-                    value_list = list(rule_values)
-
-                    for chunk_start in range(0, len(value_list), chunk_size):
-                        chunk_end = min(chunk_start + chunk_size, len(value_list))
-                        chunk = value_list[chunk_start:chunk_end]
-                        sorted_chunk = sorted(chunk)
-                        sorted_values.extend(sorted_chunk)
-
-                        # 清理已处理的块
-                        del chunk
-                        del sorted_chunk
-
-                    # 清理临时列表
-                    del value_list
-                else:
-                    # 小量数据直接排序
-                    sorted_values = sorted(list(rule_values))
-
+                sorted_values = sorted(rule_values)
                 merged_rules.append({rule_type: sorted_values})
-
-                # 清理已处理的规则组，释放内存
                 del rule_groups[rule_type]
 
         # 创建合并后的规则集
