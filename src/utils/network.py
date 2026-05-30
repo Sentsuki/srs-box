@@ -208,7 +208,12 @@ class NetworkUtils:
         for attempt in range(max_retries + 1):
             try:
                 success, size, _ = self._download_with_progress(
-                    url, output_path, progress_callback, file_id, use_cache, support_resume
+                    url,
+                    output_path,
+                    progress_callback,
+                    file_id,
+                    use_cache,
+                    support_resume,
                 )
                 if success and size > 0:
                     return True
@@ -342,7 +347,9 @@ class NetworkUtils:
                 )
                 progress_tracker.complete_file(file_id, size)
                 if success:
-                    return DownloadResult(url, True, str(output_path), None, size, duration)
+                    return DownloadResult(
+                        url, True, str(output_path), None, size, duration
+                    )
                 return DownloadResult(url, False, None, "下载失败", 0, duration)
             except Exception as e:
                 duration = time.time() - start_time
@@ -390,14 +397,18 @@ class NetworkUtils:
         success_count = len(successful)
 
         avg_speed = (
-            (total_size / (1024 * 1024)) / total_time if total_time > 0 and total_size > 0 else 0.0
+            (total_size / (1024 * 1024)) / total_time
+            if total_time > 0 and total_size > 0
+            else 0.0
         )
 
         stats = {
             "total_files": total_files,
             "successful_files": success_count,
             "failed_files": total_files - success_count,
-            "success_rate": (success_count / total_files * 100) if total_files > 0 else 0,
+            "success_rate": (
+                (success_count / total_files * 100) if total_files > 0 else 0
+            ),
             "total_size_mb": total_size / (1024 * 1024),
             "total_time_seconds": total_time,
             "average_speed_mbps": avg_speed,

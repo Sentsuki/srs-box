@@ -63,9 +63,7 @@ class DownloadProgress:
             (已完成文件数, 总文件数, 速度MB/s, 已用时间秒)
         """
         with self.lock:
-            current_downloaded = sum(
-                prog[0] for prog in self.file_progresses.values()
-            )
+            current_downloaded = sum(prog[0] for prog in self.file_progresses.values())
             elapsed_time = time.time() - self.start_time
             speed_mbps = 0.0
             if elapsed_time > 0 and current_downloaded > 0:

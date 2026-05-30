@@ -8,7 +8,7 @@ import json
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 from ..utils.config import ConfigManager
 from ..utils.file_utils import FileUtils
@@ -311,7 +311,7 @@ class ConverterService:
                 for component in components:
                     for keyword, mapped in self.MAP_DICT.items():
                         if component.startswith(keyword + ","):
-                            value = component[len(keyword) + 1:]
+                            value = component[len(keyword) + 1 :]
                             rule["rules"].append({mapped: value})
                             break
                 logic_rules.append(rule)

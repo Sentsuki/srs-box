@@ -84,9 +84,12 @@ class SummaryReporter:
             self.logger.info(f"   生成JSON文件: {stats['total_json_files']}")
 
         if convert_download_results:
-            dl_stats = download_service.get_download_statistics(convert_download_results)
+            dl_stats = download_service.get_download_statistics(
+                convert_download_results
+            )
             self.logger.info(
-                f"   Convert下载: {dl_stats['successful_sources']}/{dl_stats['total_sources']}"
+                f"   Convert下载: {dl_stats['successful_sources']}"
+                f"/{dl_stats['total_sources']}"
             )
 
         self._show_generated_files(compile_results, convert_results)
@@ -270,16 +273,16 @@ class RulesetGenerator:
 
             if ip_only_config:
                 self.logger.info("🌐 下载 ip_only 配置")
-                self.ip_download_results = (
-                    self.download_service.download_ip_sources(ip_only_config)
+                self.ip_download_results = self.download_service.download_ip_sources(
+                    ip_only_config
                 )
             else:
                 self.logger.info("📋 没有 ip_only 配置，跳过")
 
             if rulesets_config:
                 self.logger.info("📄 下载 rulesets 配置")
-                self.download_results = (
-                    self.download_service.download_rulesets_sources(rulesets_config)
+                self.download_results = self.download_service.download_rulesets_sources(
+                    rulesets_config
                 )
             else:
                 self.logger.info("📋 没有 rulesets 配置，跳过")
@@ -345,7 +348,8 @@ class RulesetGenerator:
                 )
             if convert_config:
                 self.logger.info(
-                    f"   Convert: {successful_convert}/{len(self.convert_download_results)} 成功"
+                    f"   Convert: {successful_convert}"
+                    f"/{len(self.convert_download_results)} 成功"
                 )
 
             return True
@@ -400,10 +404,8 @@ class RulesetGenerator:
                 return True
 
             self.logger.separator("开始IP规则集处理阶段")
-            self.ip_process_results = (
-                self.ip_processor_service.process_all_ip_rulesets(
-                    self.ip_download_results
-                )
+            self.ip_process_results = self.ip_processor_service.process_all_ip_rulesets(
+                self.ip_download_results
             )
 
             successful_ip_processes = sum(
