@@ -1,0 +1,29 @@
+{
+  "version": 4,
+  "rules": [
+    {
+      "domain": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "ip.cn",
+        "fonts.gstatic.cn",
+        "sglong.wechat.com",
+        "sgshort.wechat.com",
+        "fonts.googleapis.cn",
+        "sgminorshort.wechat.com"
+      ],
+      "domain_suffix": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "ip.sb",
+        "ipwho.is",
+        "db-ip.com",
+        "ipdata.co",
+        "ip-api.com",
+        "nextdns.io",
+        "ipstack.com",
+        "ipregistry.co",
+        "ipgeolocation.io",
+        "services.googleapis.cn"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "version": 4,
+  "rules": [
+    {
+      "domain": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "ad.12306.cn",
+        "push.12306.cn",
+        "epay.10010.com",
+        "daisydiskapp.com",
+        "fyb-2.cdn.bcebos.com",
+        "mpush-api.aliyun.com",
+        "app-download.fliggy.com",
+        "userlocation.googleapis.com",
+        "loan-supermarket.faas.ele.me",
+        "locationhistory-pa.googleapis.com",
+        "locationhistoryaggregates-pa.googleapis.com",
+        "locationhistoryplacedetails-pa.googleapis.com"
+      ],
+      "domain_suffix": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "pipi.cn",
+        "ule.com",
+        "adobe.io",
+        "jr.mi.com",
+        "cool3c.com",
+        "ulecdn.com",
+        "tongdun.net",
+        "look.163.com",
+        "adobestats.io",
+        "lmk.mipay.com",
+        "mall.10010.cn",
+        "api.miwifi.com",
+        "httpizza.ele.me",
+        "mibi.xiaomi.com",
+        "microfin.ele.me",
+        "game.meituan.com",
+        "xiaomimobile.com",
+        "easytomessage.com",
+        "hybrid.xiaomi.com",
+        "logan.sankuai.com",
+        "mtvod.meituan.net",
+        "unicompayment.com",
+        "video.goofish.com",
+        "0.0.198.in-addr.arpa",
+        "contents.meituan.com",
+        "genuine.autodesk.com",
+        "jr.airstarfinance.net",
+        "mtvod-ali.meituan.net",
+        "newbuy.chinaunicom.cn",
+        "expenses-fe.meituan.com",
+        "video-zb.cloudvideocdn.taobao.com"
+      ],
+      "domain_keyword": [
+        "bahoom",
+        "-flv.meituan.net",
+        "-live.meituan.net",
+        "-fin.meituan.com"
+      ]
+    }
+  ]
+}

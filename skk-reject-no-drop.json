@@ -1,0 +1,52 @@
+{
+  "version": 4,
+  "rules": [
+    {
+      "domain": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "stun.douyucdn.cn",
+        "stun1.douyucdn.cn",
+        "livewebbs2pcdn.msstatic.com",
+        "qn-cdnfile1pcdn.msstatic.com",
+        "upos-sz-302kodo.bilivideo.com",
+        "upos-sz-302ppio.bilivideo.com"
+      ],
+      "domain_suffix": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "bvmlt.top",
+        "gjfzpt.cn",
+        "p2cdn.com",
+        "uhabo.com",
+        "xycdn.com",
+        "yfcdn.net",
+        "yfp2p.net",
+        "bsccdn.net",
+        "p2p.qq.com",
+        "ppio.cloud",
+        "szbdyd.com",
+        "saxysec.com",
+        "yfcloud.com",
+        "kuiniuca.com",
+        "p2p.huya.com",
+        "pkoplink.com",
+        "cdnnodedns.cn",
+        "p2ptun.qq.com",
+        "tianwenca.com",
+        "mountaintoys.cn",
+        "nexusedgeio.com",
+        "onethingpcs.com",
+        "pcdn.yximgs.com",
+        "ietheivaicai.com",
+        "mcdn.bilivideo.cn",
+        "p2plog.douyucdn.cn",
+        "p2perrorlog.douyucdn.cn",
+        "p2pupdate.gamedl.qq.com",
+        "p2pupgrade.gamedl.qq.com"
+      ],
+      "domain_keyword": [
+        "-p2p.pull.yximgs.com",
+        "-p2p-v2.pull.yximgs.com"
+      ]
+    }
+  ]
+}

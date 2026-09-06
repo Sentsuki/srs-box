@@ -1,0 +1,19 @@
+{
+  "version": 4,
+  "rules": [
+    {
+      "domain": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "mask.icloud.com",
+        "mask-h2.icloud.com",
+        "mask.apple-dns.net",
+        "mask-api.icloud.com",
+        "mask-canary.icloud.com",
+        "canary.mask.apple-dns.net"
+      ],
+      "domain_suffix": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe"
+      ]
+    }
+  ]
+}

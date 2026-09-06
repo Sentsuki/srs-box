@@ -1,0 +1,23 @@
+{
+  "version": 4,
+  "rules": [
+    {
+      "domain": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "bbc.mp-pxcdn.com",
+        "itvpnpmobile-a.akamaihd.net"
+      ],
+      "domain_suffix": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "itv.com",
+        "bbc.co.uk",
+        "bbci.co.uk",
+        "tvlicensing.co.uk"
+      ],
+      "domain_keyword": [
+        "bbcfmt",
+        "uk-live"
+      ]
+    }
+  ]
+}
