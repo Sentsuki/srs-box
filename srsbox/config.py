@@ -23,6 +23,11 @@ from .parse import Format
 
 SCHEMA = 1
 
+# sing-box 只认 1-4（1.13.14 实测 version=5 报 "unknown rule-set version"）。
+# 放行到 255 的话，写错的版本号要等到编译阶段才报，错误还很难懂。
+# 新版 sing-box 增加版本时，改这一个数即可。
+MAX_RULESET_VERSION = 4
+
 # 规则集名字会直接变成输出文件名，必须限制成安全字符
 _NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
@@ -51,13 +56,6 @@ class Config:
     retries: int
     rulesets: tuple[Ruleset, ...] = field(default_factory=tuple)
     sing_box_sha256: str | None = None
-
-    def urls(self) -> list[str]:
-        seen: dict[str, None] = {}
-        for ruleset in self.rulesets:
-            for url in ruleset.sources:
-                seen.setdefault(url, None)
-        return list(seen)
 
 
 def _need(mapping: dict[str, Any], key: str, kind: type, where: str) -> Any:
@@ -209,8 +207,12 @@ def load(path: str | Path) -> Config:
         )
 
     ruleset_version = _need(raw, "ruleset_version", int, "配置")
-    if not 1 <= ruleset_version <= 255:
-        raise ConfigError(f"ruleset_version 越界: {ruleset_version}")
+    if not 1 <= ruleset_version <= MAX_RULESET_VERSION:
+        raise ConfigError(
+            f"ruleset_version 必须在 1-{MAX_RULESET_VERSION} 之间，"
+            f"实际 {ruleset_version}。这是 sing-box 认识的全部 rule-set 版本；"
+            "若新版 sing-box 增加了版本，请同步更新 srsbox.config.MAX_RULESET_VERSION"
+        )
 
     sing_box = _need(raw, "sing_box", dict, "配置")
     version = _need(sing_box, "version", str, "sing_box")

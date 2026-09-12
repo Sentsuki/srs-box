@@ -1,6 +1,7 @@
 import json
 
 from srsbox import cli
+from srsbox import config as config_mod
 from srsbox.config import Ruleset
 from srsbox.fetch import Fetched
 from srsbox.parse import Format
@@ -196,3 +197,62 @@ class TestRunReport:
             "configured": 3,
         }
         capsys.readouterr()
+
+
+class TestPruneStale:
+    """上一次成功、这一次失败的规则集不该在输出目录里留下旧文件冒充新的。"""
+
+    def _dirs(self, tmp_path):
+        json_dir, srs_dir = tmp_path / "json", tmp_path / "srs"
+        json_dir.mkdir()
+        srs_dir.mkdir()
+        return json_dir, srs_dir
+
+    def _cfg(self, tmp_path):
+        json_dir, srs_dir = self._dirs(tmp_path)
+        return config_mod.Config(
+            ruleset_version=4,
+            sing_box_version="1.13.14",
+            sing_box_platform="linux-amd64",
+            json_dir=json_dir,
+            srs_dir=srs_dir,
+            concurrency=1,
+            timeout=1.0,
+            retries=0,
+        )
+
+    def test_stale_files_of_a_failed_ruleset_are_removed(self, tmp_path):
+        cfg = self._cfg(tmp_path)
+        (cfg.json_dir / "x.json").write_text("上次的", encoding="utf-8")
+        (cfg.srs_dir / "x.srs").write_bytes(b"old")
+
+        cli.prune_stale([Result(name="x", error="源不可用")], cfg)
+
+        assert not (cfg.json_dir / "x.json").exists()
+        assert not (cfg.srs_dir / "x.srs").exists()
+
+    def test_successful_ruleset_is_untouched(self, tmp_path):
+        cfg = self._cfg(tmp_path)
+        (cfg.json_dir / "x.json").write_text("新的", encoding="utf-8")
+        result = Result(name="x", ok=True, json_path=cfg.json_dir / "x.json")
+
+        cli.prune_stale([result], cfg)
+
+        assert (cfg.json_dir / "x.json").exists()
+
+    def test_compile_failure_keeps_this_run_json_but_drops_stale_srs(self, tmp_path):
+        # sing-box 拒绝的那个 JSON 正是排错依据，不能删
+        cfg = self._cfg(tmp_path)
+        written = cfg.json_dir / "x.json"
+        written.write_text("本次写出的", encoding="utf-8")
+        (cfg.srs_dir / "x.srs").write_bytes(b"old")
+        result = Result(name="x", error="sing-box 编译失败", json_path=written)
+
+        cli.prune_stale([result], cfg)
+
+        assert written.exists()
+        assert not (cfg.srs_dir / "x.srs").exists()
+
+    def test_missing_files_are_not_an_error(self, tmp_path):
+        cfg = self._cfg(tmp_path)
+        cli.prune_stale([Result(name="never-existed", error="x")], cfg)

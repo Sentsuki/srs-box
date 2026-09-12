@@ -25,9 +25,12 @@ from typing import Any, Iterable
 
 from .errors import InvalidValue
 
-# 输出顺序固定，保证同样的输入产出逐字节相同的文件（便于 diff 和幂等提交）
+# 输出顺序固定，保证同样的输入产出逐字节相同的文件（便于 diff 和幂等提交）。
+#
+# 不含 query_type：没有任何解析路径能产出它，而留在这里是有害的 ——
+# normalize 会把 sing-box 允许的整数 query_type 压成字符串。移出之后，
+# 带 query_type 的上游规则走 verbatim 原样透传，反而是对的。
 FIELD_ORDER: tuple[str, ...] = (
-    "query_type",
     "network",
     "domain",
     "domain_suffix",

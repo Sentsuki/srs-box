@@ -43,12 +43,21 @@ jobs:
 
       - run: pip install -e .
 
+      # key 只取版本和平台。用 hashFiles('config.json') 的话，加一个规则集
+      # 就会让 20MB 的二进制缓存失效，白下一次。
+      - name: Resolve sing-box build
+        id: singbox
+        run: |
+          set -euo pipefail
+          echo "key=$(jq -r '.sing_box.version + "-" + .sing_box.platform' config.json)" \
+            >> "$GITHUB_OUTPUT"
+
       # 二进制放在版本化目录里，换版本自然失效，不必手动清理
       - name: Cache sing-box
         uses: actions/cache@v6
         with:
           path: .cache/sing-box
-          key: sing-box-${{ hashFiles('config.json') }}
+          key: sing-box-${{ steps.singbox.outputs.key }}
 
       # 单个源失败不是 CI 失败：srsbox 逐规则集隔离，照常退出 0。
       # 只有一个规则集都没产出（真·基础设施坏了）才会退出 1 并让这一步红。

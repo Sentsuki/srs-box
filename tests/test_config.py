@@ -254,3 +254,29 @@ class TestSingBoxDigest:
                     sing_box={**BASE["sing_box"], "sha256": bad},
                 )
             )
+
+
+class TestRulesetVersion:
+    @pytest.mark.parametrize("version", [1, 2, 3, 4])
+    def test_versions_sing_box_knows_are_accepted(self, tmp_path, version):
+        path = tmp_path / "config.json"
+        path.write_text(
+            json.dumps(
+                {**BASE, "ruleset_version": version, "rulesets": {"a": ["https://x/a"]}}
+            ),
+            encoding="utf-8",
+        )
+        assert load(path).ruleset_version == version
+
+    @pytest.mark.parametrize("version", [0, 5, 255])
+    def test_versions_sing_box_rejects_fail_at_config_time(self, tmp_path, version):
+        # 旧实现放行到 255，写错要等到编译阶段才报，错误信息还很难懂
+        path = tmp_path / "config.json"
+        path.write_text(
+            json.dumps(
+                {**BASE, "ruleset_version": version, "rulesets": {"a": ["https://x/a"]}}
+            ),
+            encoding="utf-8",
+        )
+        with pytest.raises(ConfigError, match="必须在 1-4 之间"):
+            load(path)

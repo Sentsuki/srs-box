@@ -146,6 +146,25 @@ def write_json(result: Result, rs: RuleSet, json_dir: Path) -> None:
     result.json_path = path
 
 
+def prune_stale(results: list[Result], cfg: Config) -> None:
+    """删掉与本次运行不符的旧产物。
+
+    上一次成功、这一次失败的规则集，会在输出目录里留下上次的文件，而摘要标着 ✗
+    —— 看目录的人无从分辨哪些是新的。发布流程靠运行报告区分（失败项保留上一次
+    **已发布**的版本），但本地输出目录应当只反映本次运行。
+
+    编译阶段失败时保留本次写出的 JSON：那正是 sing-box 拒绝的输入，是排错依据。
+    只处理本次选中的规则集，``--only`` 不会误删其余产物。
+    """
+    for result in results:
+        if result.ok:
+            continue
+        if result.json_path is None:
+            (cfg.json_dir / f"{result.name}.json").unlink(missing_ok=True)
+        if result.srs_path is None:
+            (cfg.srs_dir / f"{result.name}.srs").unlink(missing_ok=True)
+
+
 def run(args: argparse.Namespace) -> int:
     cfg = config_mod.load(args.config)
     specs = select(cfg, args.only)
@@ -212,6 +231,7 @@ def run(args: argparse.Namespace) -> int:
                     result.ok = False
                     result.error = str(exc)
 
+    prune_stale(results, cfg)
     summarize(results, compiled=compiled)
 
     if args.report_json:
