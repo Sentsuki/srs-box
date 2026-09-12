@@ -16,8 +16,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
           cache: pip
@@ -34,9 +34,9 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
           cache: pip
@@ -45,7 +45,7 @@ jobs:
 
       # 二进制放在版本化目录里，换版本自然失效，不必手动清理
       - name: Cache sing-box
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .cache/sing-box
           key: sing-box-${{ hashFiles('config.json') }}
