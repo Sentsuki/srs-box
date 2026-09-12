@@ -196,3 +196,61 @@ class TestRealConfig:
             "riot",
             "telegram-ip",
         ]
+
+
+class TestNumbers:
+    @pytest.mark.parametrize("bad", ["lots", None, [8], {"n": 8}])
+    def test_non_numeric_fetch_settings_raise_config_error(self, tmp_path, bad):
+        # 旧实现直接 int()，会抛裸 ValueError 打出 traceback
+        with pytest.raises(ConfigError, match="应为数字"):
+            load(
+                write(
+                    tmp_path,
+                    rulesets={"a": ["https://x/a"]},
+                    fetch={"concurrency": bad},
+                )
+            )
+
+    def test_fractional_integer_setting_rejected(self, tmp_path):
+        with pytest.raises(ConfigError, match="应为整数"):
+            load(
+                write(
+                    tmp_path,
+                    rulesets={"a": ["https://x/a"]},
+                    fetch={"retries": 1.5},
+                )
+            )
+
+    def test_float_timeout_is_accepted(self, tmp_path):
+        cfg = load(
+            write(tmp_path, rulesets={"a": ["https://x/a"]}, fetch={"timeout": 2.5})
+        )
+        assert cfg.timeout == 2.5
+
+
+class TestSingBoxDigest:
+    def test_absent_by_default(self, tmp_path):
+        cfg = load(write(tmp_path, rulesets={"a": ["https://x/a"]}))
+        assert cfg.sing_box_sha256 is None
+
+    def test_valid_digest_is_lowercased(self, tmp_path):
+        digest = "A" * 64
+        cfg = load(
+            write(
+                tmp_path,
+                rulesets={"a": ["https://x/a"]},
+                sing_box={**BASE["sing_box"], "sha256": digest},
+            )
+        )
+        assert cfg.sing_box_sha256 == "a" * 64
+
+    @pytest.mark.parametrize("bad", ["deadbeef", "z" * 64, 123])
+    def test_malformed_digest_rejected(self, tmp_path, bad):
+        with pytest.raises(ConfigError, match="64 位十六进制"):
+            load(
+                write(
+                    tmp_path,
+                    rulesets={"a": ["https://x/a"]},
+                    sing_box={**BASE["sing_box"], "sha256": bad},
+                )
+            )

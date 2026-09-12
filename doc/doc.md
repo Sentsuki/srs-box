@@ -19,9 +19,32 @@
 | `ruleset_version` | 是 | 目标 sing-box rule-set 版本 |
 | `sing_box.version` | 是 | 编译所用的 sing-box 版本（对应 GitHub Releases） |
 | `sing_box.platform` | 是 | 平台架构，如 `linux-amd64`、`windows-amd64`、`darwin-arm64` |
+| `sing_box.sha256` | 否 | 固定二进制的 SHA-256，详见下文 |
 | `output.*` | 否 | 输出目录，默认 `output/json` 与 `output/srs` |
 | `fetch.*` | 否 | 网络配置，默认并发 8、超时 30 秒、重试 3 次 |
 | `rulesets` | 是 | 规则集定义 |
+
+## sing_box.sha256
+
+可选。填入 sing-box 二进制的 SHA-256（64 位十六进制），之后每次下载完成、
+以及每次命中本地缓存时都会比对，不匹配就拒绝执行。
+
+SagerNet 的 release 不发布校验和文件，因此没有可自动比对的官方摘要 —— 这里是
+**自钉**：先正常跑一次拿到摘要，确认无误后写进配置，此后缓存被替换或下载被改写
+都会被挡下。不填则跳过校验，行为与从前一致。
+
+```bash
+# 取得当前使用的二进制摘要
+sha256sum .cache/sing-box/<版本>-<平台>/sing-box
+```
+
+```json
+"sing_box": {
+  "version": "1.14.0",
+  "platform": "linux-amd64",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}
+```
 
 ## rulesets
 
@@ -102,6 +125,7 @@ srsbox [-c CONFIG] [--only NAME] [-n] [--strict] [--sing-box PATH] [-v|-q]
 | `-n, --dry-run` | 仅生成 JSON，跳过 sing-box 下载与编译 |
 | `--strict` | 任一规则集失败即退出码非零 |
 | `--sing-box PATH` | 使用本地二进制路径，跳过自动下载（也可使用环境变量 `SING_BOX_BIN`） |
+| `--report-json PATH` | 写出机器可读的运行报告，供发布流程判断保留/清理 |
 | `-v` / `-vv` | 详细日志（`-vv` 显示 HTTP 抓取详情） |
 | `-q` | 静默模式，仅输出警告和错误 |
 
@@ -111,4 +135,5 @@ srsbox [-c CONFIG] [--only NAME] [-n] [--strict] [--sing-box PATH] [-v|-q]
 
 - **报错期望 sing-box JSON**：源文件非 JSON 格式，按内容格式显式声明 `"format": "text"` 或 `"yaml"`。
 - **避免重复下载 sing-box**：二进制会缓存在 `.cache/sing-box/<版本>-<平台>/`。CI 中可缓存该目录，或通过 `--sing-box` / `SING_BOX_BIN` 指定预装路径。
+- **校验和不匹配**：缓存里的二进制与 `sing_box.sha256` 不符。若是你有意升级了版本，更新配置里的摘要；否则删除缓存目录重新下载。
 - **单个规则集失败**：默认各规则集互不影响，其余规则集正常生成与编译。

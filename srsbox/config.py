@@ -50,6 +50,7 @@ class Config:
     timeout: float
     retries: int
     rulesets: tuple[Ruleset, ...] = field(default_factory=tuple)
+    sing_box_sha256: str | None = None
 
     def urls(self) -> list[str]:
         seen: dict[str, None] = {}
@@ -67,6 +68,30 @@ def _need(mapping: dict[str, Any], key: str, kind: type, where: str) -> Any:
         raise ConfigError(
             f"{where}.{key} 应为 {kind.__name__}，实际是 {type(value).__name__}"
         )
+    return value
+
+
+def _number(
+    mapping: dict[str, Any],
+    key: str,
+    default: float,
+    *,
+    where: str,
+    integer: bool = False,
+) -> float:
+    """取一个数值配置项。
+
+    旧实现直接 ``int(fetch.get("concurrency", 8))``，配置里写个 ``"lots"``
+    就会抛裸 ValueError 打出 traceback —— 违反"所有可预期失败都是 SrsBoxError"
+    的约定。字符串 ``"8"`` 也一并拒绝：配置是 JSON，数字就该写成数字。
+    """
+    value = mapping.get(key, default)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigError(
+            f"{where}.{key} 应为数字，实际是 {type(value).__name__}: {value!r}"
+        )
+    if integer and not float(value).is_integer():
+        raise ConfigError(f"{where}.{key} 应为整数，实际是 {value!r}")
     return value
 
 
@@ -190,6 +215,13 @@ def load(path: str | Path) -> Config:
     sing_box = _need(raw, "sing_box", dict, "配置")
     version = _need(sing_box, "version", str, "sing_box")
     platform = _need(sing_box, "platform", str, "sing_box")
+    sha256 = sing_box.get("sha256")
+    if sha256 is not None and (
+        not isinstance(sha256, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", sha256)
+    ):
+        raise ConfigError(
+            f"sing_box.sha256 应为 64 位十六进制字符串，实际是 {sha256!r}"
+        )
 
     output = raw.get("output", {})
     if not isinstance(output, dict):
@@ -200,9 +232,9 @@ def load(path: str | Path) -> Config:
     fetch = raw.get("fetch", {})
     if not isinstance(fetch, dict):
         raise ConfigError("fetch 应为对象")
-    concurrency = int(fetch.get("concurrency", 8))
-    timeout = float(fetch.get("timeout", 30))
-    retries = int(fetch.get("retries", 3))
+    concurrency = int(_number(fetch, "concurrency", 8, where="fetch", integer=True))
+    timeout = float(_number(fetch, "timeout", 30, where="fetch"))
+    retries = int(_number(fetch, "retries", 3, where="fetch", integer=True))
     if concurrency < 1:
         raise ConfigError("fetch.concurrency 必须 >= 1")
     if timeout <= 0:
@@ -227,4 +259,5 @@ def load(path: str | Path) -> Config:
         timeout=timeout,
         retries=retries,
         rulesets=tuple(expanded.values()),
+        sing_box_sha256=sha256.lower() if sha256 else None,
     )

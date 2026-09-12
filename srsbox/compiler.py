@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import logging
 import os
 import shutil
 import stat
@@ -22,6 +24,8 @@ import httpx
 
 from .errors import CompileError
 from .fetch import USER_AGENT
+
+log = logging.getLogger("srsbox")
 
 RELEASE_URL = (
     "https://github.com/SagerNet/sing-box/releases/download/"
@@ -42,11 +46,13 @@ class SingBox:
         *,
         cache_dir: Path = Path(".cache/sing-box"),
         explicit: str | os.PathLike[str] | None = None,
+        sha256: str | None = None,
     ) -> None:
         self.version = version
         self.platform = platform
         self.cache_dir = Path(cache_dir) / f"{version}-{platform}"
         self.explicit = explicit or os.environ.get("SING_BOX_BIN") or None
+        self.sha256 = sha256.lower() if sha256 else None
         self._binary: Path | None = None
 
     # ---------------- 获取 ----------------
@@ -69,29 +75,81 @@ class SingBox:
             if not path.is_file():
                 raise CompileError(f"指定的 sing-box 不存在: {path}")
             self._binary = path.resolve()
+            self._check_digest(self._binary)
             self._verify(self._binary)
             return self._binary
 
         cached = self.cache_dir / self._binary_name
-        if cached.is_file():
-            self._binary = cached.resolve()
-            return self._binary
+        if not cached.is_file():
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            ext = "zip" if self._is_windows else "tar.gz"
+            url = RELEASE_URL.format(
+                version=self.version, platform=self.platform, ext=ext
+            )
+            with tempfile.TemporaryDirectory(prefix="srsbox-singbox-") as tmp:
+                archive = Path(tmp) / f"sing-box.{ext}"
+                self._download(url, archive)
+                extracted = self._extract(archive, Path(tmp))
+                self._install(extracted, cached)
 
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
-        ext = "zip" if self._is_windows else "tar.gz"
-        url = RELEASE_URL.format(version=self.version, platform=self.platform, ext=ext)
-
-        with tempfile.TemporaryDirectory(prefix="srsbox-singbox-") as tmp:
-            archive = Path(tmp) / f"sing-box.{ext}"
-            self._download(url, archive)
-            extracted = self._extract(archive, Path(tmp))
-            shutil.copy2(extracted, cached)
-
-        if os.name != "nt":
-            cached.chmod(cached.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
         self._binary = cached.resolve()
+        # 命中缓存也要校验和复验：旧实现直接返回缓存路径，一个被截断或被篡改的
+        # 二进制会一直用下去，CI 的 actions/cache 还会把它固化到后续每次运行。
+        self._check_digest(self._binary)
         self._verify(self._binary)
         return self._binary
+
+    def _install(self, extracted: Path, target: Path) -> None:
+        """先落到同目录临时名、置好可执行位，再 ``os.replace`` 原子改名。
+
+        旧实现直接 ``shutil.copy2`` 到最终路径：中途断电或被杀，缓存里就留下
+        半个二进制，而且下次运行会命中它。原子改名保证缓存里要么没有这个文件，
+        要么是完整的那个。
+        """
+        target.parent.mkdir(parents=True, exist_ok=True)
+        staging = target.with_name(target.name + ".part")
+        try:
+            shutil.copy2(extracted, staging)
+            if os.name != "nt":
+                staging.chmod(staging.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP)
+            os.replace(staging, target)
+        except OSError as exc:
+            staging.unlink(missing_ok=True)
+            raise CompileError(f"安装 sing-box 到缓存失败: {exc}") from exc
+
+    def _check_digest(self, binary: Path) -> None:
+        """校验二进制的 SHA-256。
+
+        SagerNet 的 release 不发布校验和文件（v1.14.0 的 167 个资产里没有任何
+        checksums/.sha256/签名），所以没有可以自动比对的官方摘要。这里提供的是
+        **可选的自钉**：在 config.json 的 ``sing_box.sha256`` 里记一次，之后每次
+        下载和每次命中缓存都会比对，能挡住缓存被替换和下载被中间人改写。
+        没配就跳过，行为与从前一致。
+        """
+        digest = hashlib.sha256()
+        try:
+            with binary.open("rb") as handle:
+                for chunk in iter(lambda: handle.read(1 << 20), b""):
+                    digest.update(chunk)
+        except OSError as exc:
+            raise CompileError(f"无法读取 sing-box ({binary}): {exc}") from exc
+
+        actual = digest.hexdigest()
+        if self.sha256 is None:
+            log.debug(
+                "sing-box sha256=%s（可写入 config.json 的 sing_box.sha256 固定）",
+                actual,
+            )
+            return
+        if actual != self.sha256:
+            raise CompileError(
+                f"sing-box 校验和不匹配，拒绝执行:\n"
+                f"  文件 {binary}\n"
+                f"  期望 {self.sha256}\n"
+                f"  实际 {actual}\n"
+                "  若这是你有意更换的版本，请更新 config.json 的 sing_box.sha256；"
+                "否则删除缓存目录后重试"
+            )
 
     def _download(self, url: str, target: Path) -> None:
         try:

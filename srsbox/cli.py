@@ -187,6 +187,7 @@ def run(args: argparse.Namespace) -> int:
             cfg.sing_box_version,
             cfg.sing_box_platform,
             explicit=args.sing_box,
+            sha256=cfg.sing_box_sha256,
         )
         try:
             log.info("使用 sing-box %s", sing_box.binary())

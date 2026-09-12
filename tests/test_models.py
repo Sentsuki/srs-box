@@ -151,3 +151,58 @@ class TestRuleSet:
             return json.dumps(r.to_json(), ensure_ascii=False, indent=2)
 
         assert build() == build()
+
+
+class TestVerbatimFiltering:
+    """透传规则此前完全绕过过滤与去重。"""
+
+    def test_filter_reaches_invert_rules(self):
+        r = rs()
+        r.add_verbatim({"domain": ["keep.com", "x.ruleset.skk.moe"], "invert": True})
+        assert r.drop_values_containing(["ruleset.skk.moe"]) == 1
+        assert r.to_json()["rules"] == [{"domain": ["keep.com"], "invert": True}]
+
+    def test_filter_reaches_unknown_field_rules(self):
+        r = rs()
+        r.add_verbatim({"domain": ["x.ruleset.skk.moe"], "wifi_ssid": ["home"]})
+        assert r.drop_values_containing(["ruleset.skk.moe"]) == 1
+        # 值被过滤光，整条没有意义了
+        assert r.to_json()["rules"] == []
+
+    def test_logical_rule_is_dropped_whole(self):
+        # 从 AND 里摘掉一个条件会改变整条规则的语义 —— 和解析层同一条原则
+        r = rs()
+        rule = {
+            "type": "logical",
+            "mode": "and",
+            "rules": [{"domain": ["a.com"]}, {"domain": ["x.ruleset.skk.moe"]}],
+        }
+        r.add_verbatim(rule)
+        assert r.drop_values_containing(["ruleset.skk.moe"]) == 1
+        assert r.to_json()["rules"] == []
+
+    def test_clean_logical_rule_survives(self):
+        r = rs()
+        rule = {"type": "logical", "mode": "or", "rules": [{"domain": ["a.com"]}]}
+        r.add_verbatim(rule)
+        assert r.drop_values_containing(["ruleset.skk.moe"]) == 0
+        assert r.to_json()["rules"] == [rule]
+
+    def test_identical_verbatim_rules_are_deduped(self):
+        r = rs()
+        rule = {"type": "logical", "mode": "or", "rules": [{"domain": ["a.com"]}]}
+        r.add_verbatim(dict(rule))
+        r.add_verbatim(dict(rule))
+        assert r.to_json()["rules"] == [rule]
+
+    def test_distinct_verbatim_rules_both_kept(self):
+        r = rs()
+        r.add_verbatim({"domain": ["a.com"], "invert": True})
+        r.add_verbatim({"domain": ["b.com"], "invert": True})
+        assert len(r.to_json()["rules"]) == 2
+
+    def test_int_values_are_not_substring_matched(self):
+        # 端口 443 不该因为 needle "44" 被误伤
+        r = rs()
+        r.add_verbatim({"port": [443], "wifi_ssid": ["home"]})
+        assert r.drop_values_containing(["44"]) == 0
