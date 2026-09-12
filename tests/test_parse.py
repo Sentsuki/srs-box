@@ -86,7 +86,7 @@ class TestLogical:
             {
                 "type": "logical",
                 "mode": "and",
-                "rules": [{"domain": ["a.com"]}, {"port": ["443"]}],
+                "rules": [{"domain": ["a.com"]}, {"port": [443]}],
             }
         ]
 
@@ -94,6 +94,44 @@ class TestLogical:
         rs = run("NOT,((DOMAIN,a.com))")
         rule = rs.to_json()["rules"][0]
         assert rule["mode"] == "and" and rule["invert"] is True
+
+    def test_child_port_is_an_int_not_a_string(self):
+        # 字符串端口会让 sing-box 拒绝编译整个规则集：
+        #   FATAL rules[0].rules[1].port: cannot unmarshal string into uint16
+        rs = run("AND,((DOMAIN,a.com),(DST-PORT,443))")
+        port = rs.to_json()["rules"][0]["rules"][1]["port"][0]
+        assert port == 443 and isinstance(port, int)
+
+    def test_child_values_are_normalized_like_plain_ones(self):
+        rs = run("AND,((DOMAIN,Example.COM.),(IP-CIDR,1.2.3.4/24))")
+        assert rs.to_json()["rules"][0]["rules"] == [
+            {"domain": ["example.com"]},
+            {"ip_cidr": ["1.2.3.0/24"]},
+        ]
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "AND,((DOMAIN,a.com),(GEOIP,CN))",  # 认识但表达不了
+            "AND,((DOMAIN,a.com),(MADE-UP,x))",  # 根本不认识
+            "AND,((DOMAIN,a.com),(IP-CIDR,not-an-ip))",  # 取值非法
+            "AND,((DOMAIN,a.com),(DST-PORT,99999))",  # 端口越界
+        ],
+    )
+    def test_unusable_child_drops_the_whole_rule(self, text):
+        # 少一个子项的 AND 是另一条规则：匹配面被放宽，比丢掉更危险
+        rs = run(text)
+        assert rs.total == 0
+        assert rs.diag.invalid_total == 1
+        assert "整条逻辑规则丢弃" in rs.diag.invalid_samples[0]
+
+    def test_malformed_logical_rule_is_recorded(self):
+        rs = run("AND,nonsense")
+        assert rs.total == 0 and rs.diag.invalid_total == 1
+
+    def test_strict_format_rejects_logical_rules(self):
+        with pytest.raises(ParseError, match="严格格式不允许逻辑规则"):
+            run("AND,((DOMAIN,a.com),(DST-PORT,443))", Format.CIDR)
 
 
 class TestSingbox:

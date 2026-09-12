@@ -20,8 +20,8 @@ import re
 from enum import Enum
 from typing import Any, Iterable
 
-from .errors import ParseError
-from .models import RuleSet
+from .errors import InvalidValue, ParseError
+from .models import RuleSet, normalize
 from .vocab import LOGICAL, SKIP, TYPES
 
 
@@ -129,17 +129,52 @@ def _feed_bare(value: str, rs: RuleSet, allow: frozenset[str] | None) -> None:
     _commit(field, value, rs, allow, origin=value)
 
 
-def _feed_logical(head: str, rest: str, rs: RuleSet) -> None:
-    """``AND,((DOMAIN,a),(DOMAIN-SUFFIX,b))`` -> sing-box logical rule。"""
+def _feed_logical(
+    head: str,
+    rest: str,
+    rs: RuleSet,
+    allow: frozenset[str] | None,
+    *,
+    origin: str,
+) -> None:
+    """``AND,((DOMAIN,a),(DOMAIN-SUFFIX,b))`` -> sing-box logical rule。
+
+    逻辑规则走 :meth:`RuleSet.add_verbatim`，绕开了 ``add`` 那条归一化管道，
+    因此这里必须自己调用 :func:`~srsbox.models.normalize`：否则 ``DST-PORT,443``
+    会产出字符串端口，sing-box 直接拒绝编译**整个**规则集。
+
+    任一子项无法表达时整条丢弃。逻辑规则少一个子项就是另一条规则 —— AND 少一项
+    等于放宽匹配面，把它输出去比丢掉更危险 —— 所以绝不产出残缺的逻辑规则。
+    """
     mode, invert = LOGICAL[head]
     children: list[dict[str, Any]] = []
+
+    def give_up(reason: str) -> None:
+        rs.diag.bad_value("logical", f"{reason}，整条逻辑规则丢弃: {origin!r}")
+
     for part in re.findall(r"\(([^()]*)\)", rest):
         sub_head, sep, sub_rest = part.partition(",")
-        field = TYPES.get(sub_head.strip().upper())
-        if sep and field:
-            children.append({field: [_strip_inline_comment(sub_rest.split(",")[0])]})
+        sub_type = sub_head.strip().upper()
+        field = TYPES.get(sub_type)
+        if not sep or field is None:
+            give_up(f"子项类型 {sub_type or part!r} 无法表达")
+            return
+        if allow is not None and field not in allow:
+            raise ParseError(
+                f"严格格式不允许逻辑规则里的 {field} 子项（来自 {origin!r}）；"
+                '若该源确实混有此类规则，请改用 "format": "text"'
+            )
+        value = sub_rest.split(",")[0].strip()
+        if field != "domain_regex":
+            value = _strip_inline_comment(value)
+        try:
+            children.append({field: [normalize(field, value)]})
+        except InvalidValue as exc:
+            give_up(f"子项取值非法（{exc}）")
+            return
+
     if not children:
-        rs.diag.unknown_type(head)
+        give_up("没有可用子项")
         return
     rule: dict[str, Any] = {"type": "logical", "mode": mode, "rules": children}
     if invert:
@@ -155,7 +190,7 @@ def _feed_entry(raw: str, rs: RuleSet, allow: frozenset[str] | None) -> None:
 
     if sep:
         if upper in LOGICAL:
-            _feed_logical(upper, rest, rs)
+            _feed_logical(upper, rest, rs, allow, origin=raw)
             return
         field = TYPES.get(upper)
         if field:

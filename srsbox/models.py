@@ -2,9 +2,13 @@
 
 设计契约：
 
-* 规则值只能经 :meth:`RuleSet.add` 进入，只能经 :meth:`RuleSet.to_json` 离开。
-* ``add`` 负责字段白名单和取值归一/校验，因此**不可能**产出 sing-box 不认识的
-  字段名、错误类型（例如字符串端口）或非法 CIDR。
+* 规则值有两条入口，只能经 :meth:`RuleSet.to_json` 离开。
+* 主入口 :meth:`RuleSet.add` 负责字段白名单和取值归一/校验，因此并入 ``plain``
+  的值不可能是 sing-box 不认识的字段名、错误类型（例如字符串端口）或非法 CIDR。
+* 旁路 :meth:`RuleSet.add_verbatim` 原样透传整条规则，**不做任何校验** ——
+  这是它存在的意义（上游的未知字段不该被我们判死刑），也是它的风险：
+  自己构造 verbatim 规则的调用方必须自行调用 :func:`normalize`，
+  否则就绕开了上面那条保证。
 * ``to_json`` 是唯一的序列化出口，转义交给 ``json`` 模块完成，
   绝不对序列化结果做字符串手术。
 """
@@ -185,7 +189,12 @@ class RuleSet:
             return False
 
     def add_verbatim(self, rule: dict[str, Any]) -> None:
-        """原样透传一条无法合并的规则。"""
+        """原样透传一条无法合并的规则。
+
+        不做校验：上游 sing-box JSON 里的未知字段正是靠这条路活下来的。
+        代价是调用方若**自己构造**规则（而非透传上游内容），必须先用
+        :func:`normalize` 归一每个叶子值 —— 见 :func:`srsbox.parse._feed_logical`。
+        """
         self.verbatim.append(rule)
 
     def mergeable(self, rule: dict[str, Any]) -> bool:
