@@ -1,0 +1,57 @@
+{
+  "version": 4,
+  "rules": [
+    {
+      "domain": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "athome.fandango.com",
+        "bcbolt446c5271-a.akamaihd.net",
+        "cbsi.live.ott.irdeto.com",
+        "cbsplaylistserver.aws.syncbak.com",
+        "cbsservice.aws.syncbak.com",
+        "dashasiafox.akamaized.net",
+        "edge.api.brightcove.com",
+        "prod-api.crackle.com",
+        "staticasiafox.akamaized.net",
+        "tubi.tv",
+        "tubitv.com",
+        "vudu.com",
+        "www.tubi.tv",
+        "www.tubitv.com"
+      ]
+    },
+    {
+      "domain_suffix": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "cbsaavideo.com",
+        "cbsi.com",
+        "cbsivideo.com",
+        "disco-api.com",
+        "discoveryplus.co.uk",
+        "discoveryplus.com",
+        "discoveryplus.in",
+        "dnitv.com",
+        "encoretvb.com",
+        "fox.com",
+        "foxdcg.com",
+        "foxplus.com",
+        "happyon.jp",
+        "hjholdings.jp",
+        "hulu.com",
+        "hulu.jp",
+        "hulu.tv",
+        "hulu.us",
+        "huluim.com",
+        "hulustream.com",
+        "paramountplus.com",
+        "peacocktv.com",
+        "pluto.tv",
+        "production-public.tubi.io",
+        "sho.com",
+        "showtime.com",
+        "theplatform.com",
+        "uplynk.com"
+      ]
+    }
+  ]
+}

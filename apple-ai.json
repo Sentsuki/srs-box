@@ -1,0 +1,21 @@
+{
+  "version": 4,
+  "rules": [
+    {
+      "domain_suffix": [
+        "apple-relay.apple.com",
+        "apple-relay.cloudflare.com",
+        "apple-relay.fastly-edge.com",
+        "cp4.cloudflare.com",
+        "gspe1-ssl.ls.apple.com",
+        "guzzoni.apple.com",
+        "smoot.apple.com"
+      ]
+    },
+    {
+      "domain_keyword": [
+        "apple-relay"
+      ]
+    }
+  ]
+}

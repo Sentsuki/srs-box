@@ -1,0 +1,40 @@
+{
+  "version": 4,
+  "rules": [
+    {
+      "domain": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "ds-linear-abematv.akamaized.net"
+      ]
+    },
+    {
+      "domain_suffix": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "abema-tv.com",
+        "abema.io",
+        "abema.tv",
+        "ameba.jp",
+        "amebame.com",
+        "amebaownd.com",
+        "amebaowndme.com",
+        "ameblo.jp",
+        "dmc.nico",
+        "dmm-extension.com",
+        "dmm.co.jp",
+        "dmm.com",
+        "dokusho-ojikan.jp",
+        "happyon.jp",
+        "hayabusa.dev",
+        "hayabusa.io",
+        "hayabusa.media",
+        "hjholdings.jp",
+        "hulu.jp",
+        "location-plus.nhk.jp",
+        "nicovideo.jp",
+        "socdm.com",
+        "tver.jp",
+        "winticket.jp"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "version": 4,
+  "rules": [
+    {
+      "domain": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "assets1.xboxlive.com",
+        "assets2.xboxlive.com",
+        "blizzard.gcdn.cloudn.co.kr",
+        "blzddist1-a.akamaihd.net",
+        "blzddist2-a.akamaihd.net",
+        "blzddist3-a.akamaihd.net",
+        "blzddistkr1-a.akamaihd.net",
+        "cdn-patch.swtor.com",
+        "content-origin.steampowered.com",
+        "dist.blizzard.com",
+        "dlgarenanow-a.akamaihd.net",
+        "download.hikarifield.co.jp",
+        "download.xbox.com",
+        "download2.epicgames.com",
+        "download3.epicgames.com",
+        "download4.epicgames.com",
+        "edge.steam-dns.top.comcast.net",
+        "epicgames-download1.akamaized.net",
+        "fastly-download.epicgames.com",
+        "gamedownloads-rockstargames-com.akamaized.net",
+        "gog-cdn-fastly-cp77.gog.com",
+        "gog-cdn-fastly.gog.com",
+        "level3.blizzard.com",
+        "origin-a.akamaihd.net",
+        "packagespc.xboxlive.com",
+        "pf-cdn-content-prod.azureedge.net",
+        "static.hikarifield.co.jp",
+        "steam.apac.qtlglb.com",
+        "steam.eca.qtlglb.com",
+        "steam.naeu.qtlglb.com",
+        "steam.ru.qtlglb.com",
+        "steampipe-kr.akamaized.net",
+        "steampipe-partner.akamaized.net",
+        "steampipe.akamaized.net",
+        "xvcf1.xboxlive.com",
+        "xvcf2.xboxlive.com"
+      ]
+    },
+    {
+      "domain_suffix": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "cdn.blizzard.com",
+        "cdn.ea.com",
+        "cdn.nintendo.net",
+        "cdn.ubi.com",
+        "content.cdp.bethesda.net",
+        "content.steampowered.com",
+        "dl.playstation.net",
+        "download.cdp.bethesda.net",
+        "download.dm.origin.com",
+        "download.epicgames.com",
+        "dyn.riotcdn.net",
+        "egdownload.fastly-edge.com",
+        "epicgamescdn.com",
+        "steamcontent.com",
+        "wup.eshop.nintendo.net",
+        "wup.shop.nintendo.net"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "version": 4,
+  "rules": [
+    {
+      "domain": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "ad.12306.cn",
+        "app-download.fliggy.com",
+        "daisydiskapp.com",
+        "epay.10010.com",
+        "fyb-2.cdn.bcebos.com",
+        "loan-supermarket.faas.ele.me",
+        "locationhistory-pa.googleapis.com",
+        "locationhistoryaggregates-pa.googleapis.com",
+        "locationhistoryplacedetails-pa.googleapis.com",
+        "mpush-api.aliyun.com",
+        "push.12306.cn",
+        "userlocation.googleapis.com"
+      ]
+    },
+    {
+      "domain_suffix": [
+        "0.0.198.in-addr.arpa",
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "adobe.io",
+        "adobestats.io",
+        "api.miwifi.com",
+        "contents.meituan.com",
+        "cool3c.com",
+        "easytomessage.com",
+        "expenses-fe.meituan.com",
+        "game.meituan.com",
+        "genuine.autodesk.com",
+        "httpizza.ele.me",
+        "hybrid.xiaomi.com",
+        "jr.airstarfinance.net",
+        "jr.mi.com",
+        "lmk.mipay.com",
+        "logan.sankuai.com",
+        "look.163.com",
+        "mall.10010.cn",
+        "mibi.xiaomi.com",
+        "microfin.ele.me",
+        "mtvod-ali.meituan.net",
+        "mtvod.meituan.net",
+        "newbuy.chinaunicom.cn",
+        "pipi.cn",
+        "tongdun.net",
+        "ule.com",
+        "ulecdn.com",
+        "unicompayment.com",
+        "video-zb.cloudvideocdn.taobao.com",
+        "video.goofish.com",
+        "xiaomimobile.com"
+      ]
+    },
+    {
+      "domain_keyword": [
+        "-fin.meituan.com",
+        "-flv.meituan.net",
+        "-live.meituan.net",
+        "bahoom"
+      ]
+    }
+  ]
+}

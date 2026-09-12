@@ -1,0 +1,30 @@
+{
+  "version": 4,
+  "rules": [
+    {
+      "domain": [
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "a1ewuiz2p7wdvw-ats.iot.us-west-2.amazonaws.com",
+        "api.wakatime.com",
+        "hanime1.me",
+        "hv-monster-submit.skk.moe",
+        "simpcraft.com"
+      ]
+    },
+    {
+      "domain_suffix": [
+        "18comic.org",
+        "18comic.vip",
+        "7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe",
+        "akamai-content-networks.com",
+        "akamaihd.net",
+        "akamaized.net",
+        "azurefd.net",
+        "hentaiverse.org",
+        "kxcdn.com",
+        "sososo.io",
+        "vo.msecnd.net"
+      ]
+    }
+  ]
+}
