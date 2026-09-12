@@ -5,47 +5,75 @@ on:
     - cron: '0 5 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+concurrency:
+  group: update-ruleset
+  cancel-in-progress: false
+
 jobs:
-  update:
+  test:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-        
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.13'
-          
-      - name: Install dependencies
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: Lint
         run: |
-          python -m pip install --upgrade pip
-          pip install pandas requests pyyaml
-      
-      - name: Generate rulesets
-        run: python main.py
-      
-      - name: Git push srs
-        run: |
-          cd output/srs || exit 1
-          git init -b srs_release
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "update srs"
-          git push -f "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" srs_release
+          black --check srsbox tests
+          isort --check-only srsbox tests
+          flake8 srsbox tests
+      - name: Test
+        run: pytest
 
-      - name: Git push json
+  update:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          cache: pip
+
+      - run: pip install -e .
+
+      # 二进制放在版本化目录里，换版本自然失效，不必手动清理
+      - name: Cache sing-box
+        uses: actions/cache@v4
+        with:
+          path: .cache/sing-box
+          key: sing-box-${{ hashFiles('config.json') }}
+
+      - name: Generate rulesets
+        run: srsbox
+
+      - name: Verify output
         run: |
-          cd output/json || exit 1
-          git init -b json_release
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "update json"
-          git push -f "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" json_release
+          test -n "$(ls -A output/srs 2>/dev/null)" || { echo "output/srs 为空"; exit 1; }
+          test -n "$(ls -A output/json 2>/dev/null)" || { echo "output/json 为空"; exit 1; }
+          echo "srs: $(ls output/srs | wc -l) 个, json: $(ls output/json | wc -l) 个"
+
+      - name: Publish
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          publish() {
+            local dir="$1" branch="$2"
+            git -C "$dir" init -q -b "$branch"
+            git -C "$dir" config user.name "github-actions[bot]"
+            git -C "$dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git -C "$dir" add -A
+            git -C "$dir" commit -q -m "update ${branch%_release} ($(date -u +%F))"
+            git -C "$dir" push -f -q "https://x-access-token:${TOKEN}@github.com/${REPO}" "$branch"
+            echo "已推送 $branch"
+          }
+          publish output/srs srs_release
+          publish output/json json_release
