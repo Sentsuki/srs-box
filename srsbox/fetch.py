@@ -37,12 +37,29 @@ class Fetched:
         return self.text is not None
 
 
-def _decode(response: httpx.Response) -> str:
-    """优先按 UTF-8 解码；失败才退回 httpx 依据响应头的猜测。"""
+def _decode(data: bytes, encoding: str | None) -> str:
+    """优先按 UTF-8 解码；失败才退回响应头声明的编码。"""
     try:
-        return response.content.decode("utf-8")
+        return data.decode("utf-8")
     except UnicodeDecodeError:
-        return response.text
+        return data.decode(encoding or "utf-8", errors="replace")
+
+
+async def _read_capped(response: httpx.Response) -> bytes | None:
+    """流式读取响应体，超过上限立刻放弃。返回 ``None`` 表示超限。
+
+    旧实现先 ``client.get()`` 把整个响应体读进内存，再检查 ``len(content)``
+    —— 那时内存已经花掉了，"防止误配一个巨大地址把内存吃光"这句注释是假的。
+    边收边数才是真的上限。
+    """
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in response.aiter_bytes(65536):
+        total += len(chunk)
+        if total > MAX_BYTES:
+            return None
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 async def _fetch_one(
@@ -52,26 +69,29 @@ async def _fetch_one(
     retries: int,
 ) -> Fetched:
     last = "未知错误"
-    async with semaphore:
-        for attempt in range(retries + 1):
-            try:
-                response = await client.get(url)
-                if response.status_code in _NO_RETRY:
-                    return Fetched(url, error=f"HTTP {response.status_code}")
-                response.raise_for_status()
-                if len(response.content) > MAX_BYTES:
-                    return Fetched(
-                        url, error=f"响应过大: {len(response.content) / 1e6:.1f} MB"
-                    )
-                if not response.content.strip():
-                    return Fetched(url, error="响应为空")
-                return Fetched(url, text=_decode(response))
-            except httpx.HTTPStatusError as exc:
-                last = f"HTTP {exc.response.status_code}"
-            except httpx.HTTPError as exc:
-                last = f"{type(exc).__name__}: {exc}"
-            if attempt < retries:
-                await asyncio.sleep(2**attempt)
+    for attempt in range(retries + 1):
+        try:
+            # 信号量只包住真正在网络上的这一段。退避 sleep 不占并发位 ——
+            # 否则一个死链会霸着一个槽位睡完全部退避（1+2+4…秒），
+            # 把其余源一起拖慢。
+            async with semaphore:
+                async with client.stream("GET", url) as response:
+                    if response.status_code in _NO_RETRY:
+                        return Fetched(url, error=f"HTTP {response.status_code}")
+                    response.raise_for_status()
+                    encoding = response.encoding
+                    data = await _read_capped(response)
+            if data is None:
+                return Fetched(url, error=f"响应超过 {MAX_BYTES // (1 << 20)} MB 上限")
+            if not data.strip():
+                return Fetched(url, error="响应为空")
+            return Fetched(url, text=_decode(data, encoding))
+        except httpx.HTTPStatusError as exc:
+            last = f"HTTP {exc.response.status_code}"
+        except httpx.HTTPError as exc:
+            last = f"{type(exc).__name__}: {exc}"
+        if attempt < retries:
+            await asyncio.sleep(2**attempt)
     return Fetched(url, error=last)
 
 

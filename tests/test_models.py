@@ -49,6 +49,26 @@ class TestNormalize:
         # 正则大小写敏感，不能跟域名一样 lower()
         assert normalize("domain_regex", "^AdS?\\.") == "^AdS?\\."
 
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            ("process_name", "Telegram"),
+            ("process_name", "WeChat.exe"),
+            ("process_path", "/Applications/Surge.app/Contents/MacOS/Surge"),
+            ("package_name", "com.Example.App"),
+        ],
+    )
+    def test_process_and_package_case_is_preserved(self, field, value):
+        # Linux/macOS 上进程名与路径大小写敏感，压成小写等于让规则永不命中
+        assert normalize(field, value) == value
+
+    @pytest.mark.parametrize("field", ["domain", "domain_suffix"])
+    def test_wildcards_rejected_in_host_fields(self, field):
+        # sing-box 的 domain/domain_suffix 不认通配符，写进去就是永不命中的死规则；
+        # 通配符域名由解析层转成 domain_regex，到不了这里
+        with pytest.raises(InvalidValue):
+            normalize(field, "*.example.com")
+
     def test_unknown_field_rejected(self):
         with pytest.raises(InvalidValue):
             normalize("geoip", "CN")
@@ -131,3 +151,58 @@ class TestRuleSet:
             return json.dumps(r.to_json(), ensure_ascii=False, indent=2)
 
         assert build() == build()
+
+
+class TestVerbatimFiltering:
+    """透传规则此前完全绕过过滤与去重。"""
+
+    def test_filter_reaches_invert_rules(self):
+        r = rs()
+        r.add_verbatim({"domain": ["keep.com", "x.ruleset.skk.moe"], "invert": True})
+        assert r.drop_values_containing(["ruleset.skk.moe"]) == 1
+        assert r.to_json()["rules"] == [{"domain": ["keep.com"], "invert": True}]
+
+    def test_filter_reaches_unknown_field_rules(self):
+        r = rs()
+        r.add_verbatim({"domain": ["x.ruleset.skk.moe"], "wifi_ssid": ["home"]})
+        assert r.drop_values_containing(["ruleset.skk.moe"]) == 1
+        # 值被过滤光，整条没有意义了
+        assert r.to_json()["rules"] == []
+
+    def test_logical_rule_is_dropped_whole(self):
+        # 从 AND 里摘掉一个条件会改变整条规则的语义 —— 和解析层同一条原则
+        r = rs()
+        rule = {
+            "type": "logical",
+            "mode": "and",
+            "rules": [{"domain": ["a.com"]}, {"domain": ["x.ruleset.skk.moe"]}],
+        }
+        r.add_verbatim(rule)
+        assert r.drop_values_containing(["ruleset.skk.moe"]) == 1
+        assert r.to_json()["rules"] == []
+
+    def test_clean_logical_rule_survives(self):
+        r = rs()
+        rule = {"type": "logical", "mode": "or", "rules": [{"domain": ["a.com"]}]}
+        r.add_verbatim(rule)
+        assert r.drop_values_containing(["ruleset.skk.moe"]) == 0
+        assert r.to_json()["rules"] == [rule]
+
+    def test_identical_verbatim_rules_are_deduped(self):
+        r = rs()
+        rule = {"type": "logical", "mode": "or", "rules": [{"domain": ["a.com"]}]}
+        r.add_verbatim(dict(rule))
+        r.add_verbatim(dict(rule))
+        assert r.to_json()["rules"] == [rule]
+
+    def test_distinct_verbatim_rules_both_kept(self):
+        r = rs()
+        r.add_verbatim({"domain": ["a.com"], "invert": True})
+        r.add_verbatim({"domain": ["b.com"], "invert": True})
+        assert len(r.to_json()["rules"]) == 2
+
+    def test_int_values_are_not_substring_matched(self):
+        # 端口 443 不该因为 needle "44" 被误伤
+        r = rs()
+        r.add_verbatim({"port": [443], "wifi_ssid": ["home"]})
+        assert r.drop_values_containing(["44"]) == 0

@@ -2,15 +2,20 @@
 
 设计契约：
 
-* 规则值只能经 :meth:`RuleSet.add` 进入，只能经 :meth:`RuleSet.to_json` 离开。
-* ``add`` 负责字段白名单和取值归一/校验，因此**不可能**产出 sing-box 不认识的
-  字段名、错误类型（例如字符串端口）或非法 CIDR。
+* 规则值有两条入口，只能经 :meth:`RuleSet.to_json` 离开。
+* 主入口 :meth:`RuleSet.add` 负责字段白名单和取值归一/校验，因此并入 ``plain``
+  的值不可能是 sing-box 不认识的字段名、错误类型（例如字符串端口）或非法 CIDR。
+* 旁路 :meth:`RuleSet.add_verbatim` 原样透传整条规则，**不做任何校验** ——
+  这是它存在的意义（上游的未知字段不该被我们判死刑），也是它的风险：
+  自己构造 verbatim 规则的调用方必须自行调用 :func:`normalize`，
+  否则就绕开了上面那条保证。
 * ``to_json`` 是唯一的序列化出口，转义交给 ``json`` 模块完成，
   绝不对序列化结果做字符串手术。
 """
 
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter
 from dataclasses import dataclass, field
@@ -20,9 +25,12 @@ from typing import Any, Iterable
 
 from .errors import InvalidValue
 
-# 输出顺序固定，保证同样的输入产出逐字节相同的文件（便于 diff 和幂等提交）
+# 输出顺序固定，保证同样的输入产出逐字节相同的文件（便于 diff 和幂等提交）。
+#
+# 不含 query_type：没有任何解析路径能产出它，而留在这里是有害的 ——
+# normalize 会把 sing-box 允许的整数 query_type 压成字符串。移出之后，
+# 带 query_type 的上游规则走 verbatim 原样透传，反而是对的。
 FIELD_ORDER: tuple[str, ...] = (
-    "query_type",
     "network",
     "domain",
     "domain_suffix",
@@ -41,9 +49,17 @@ FIELDS: frozenset[str] = frozenset(FIELD_ORDER)
 _INT_FIELDS = frozenset({"port", "source_port"})
 _CIDR_FIELDS = frozenset({"ip_cidr", "source_ip_cidr"})
 _HOST_FIELDS = frozenset({"domain", "domain_suffix"})
-_VERBATIM_FIELDS = frozenset({"domain_regex"})  # 大小写敏感，不能 lower()
+# 大小写敏感，不能 lower()。
+#
+# 域名可以安全地小写（DNS 本就大小写不敏感），但进程名和路径在 Linux/macOS 上
+# 是大小写敏感的：把 ``Telegram`` 压成 ``telegram`` 会让规则永不命中。
+_VERBATIM_FIELDS = frozenset(
+    {"domain_regex", "process_name", "process_path", "package_name"}
+)
 
-_LABEL = r"(?!-)[A-Za-z0-9_*-]{1,63}(?<!-)"
+# 不含 ``*``：带通配符的值在 sing-box 的 domain/domain_suffix 里是字面量，
+# 永不命中。通配符域名由解析层转成 domain_regex，到不了这里。
+_LABEL = r"(?!-)[A-Za-z0-9_-]{1,63}(?<!-)"
 _DOMAIN_RE = re.compile(rf"^(?=.{{1,253}}$){_LABEL}(?:\.{_LABEL})*$")
 
 MAX_INVALID_SAMPLES = 5
@@ -117,6 +133,25 @@ def normalize(field_name: str, raw: Any) -> str | int:
     return value
 
 
+def _hits(value: Any, needles: list[str]) -> bool:
+    text = str(value).lower()
+    return any(needle in text for needle in needles)
+
+
+def _rule_hits(node: Any, needles: list[str]) -> bool:
+    """递归判断一条规则（含嵌套逻辑规则）的任意字符串叶子是否命中。"""
+    if isinstance(node, dict):
+        return any(_rule_hits(value, needles) for value in node.values())
+    if isinstance(node, list):
+        return any(_rule_hits(item, needles) for item in node)
+    return isinstance(node, str) and _hits(node, needles)
+
+
+def _rule_key(rule: dict[str, Any]) -> str:
+    """透传规则的去重键。两个源给出同一条逻辑规则时不该输出两遍。"""
+    return json.dumps(rule, sort_keys=True, ensure_ascii=False, default=str)
+
+
 @dataclass
 class Diagnostics:
     """解析过程中积累的"非致命异常"，最终出现在摘要里。
@@ -166,6 +201,7 @@ class RuleSet:
         # 无法并入 plain 的规则（逻辑规则、带 invert 的规则、含未知字段的规则）
         # 原样透传，绝不丢弃，也绝不与其他规则的值混在一起去重。
         self.verbatim: list[dict[str, Any]] = []
+        self._verbatim_keys: set[str] = set()
         self.diag = Diagnostics()
 
     # ---------------- 写入 ----------------
@@ -185,7 +221,19 @@ class RuleSet:
             return False
 
     def add_verbatim(self, rule: dict[str, Any]) -> None:
-        """原样透传一条无法合并的规则。"""
+        """原样透传一条无法合并的规则。
+
+        不做校验：上游 sing-box JSON 里的未知字段正是靠这条路活下来的。
+        代价是调用方若**自己构造**规则（而非透传上游内容），必须先用
+        :func:`normalize` 归一每个叶子值 —— 见 :func:`srsbox.parse._feed_logical`。
+
+        完全相同的规则只保留一条：多个源给出同一条逻辑规则是常事，
+        ``plain`` 那边有集合去重，这边没有就会重复输出。
+        """
+        key = _rule_key(rule)
+        if key in self._verbatim_keys:
+            return
+        self._verbatim_keys.add(key)
         self.verbatim.append(rule)
 
     def mergeable(self, rule: dict[str, Any]) -> bool:
@@ -199,7 +247,11 @@ class RuleSet:
     # ---------------- 变换 ----------------
 
     def drop_values_containing(self, needles: Iterable[str]) -> int:
-        """删除含指定子串的规则值（大小写不敏感），返回删除条数。"""
+        """删除含指定子串的规则值（大小写不敏感），返回删除条数。
+
+        透传规则同样受这条过滤约束 —— 旧实现只扫 ``plain``，于是带 ``invert``
+        或含未知字段的规则里的水印域名能原样漏到产物里。
+        """
         lowered = [n.lower() for n in needles]
         if not lowered:
             return 0
@@ -207,10 +259,56 @@ class RuleSet:
         for field_name, values in self.plain.items():
             if field_name in _INT_FIELDS:
                 continue
-            kept = {v for v in values if not any(n in str(v).lower() for n in lowered)}
+            kept = {v for v in values if not _hits(v, lowered)}
             removed += len(values) - len(kept)
             self.plain[field_name] = kept
+        removed += self._filter_verbatim(lowered)
         self.diag.dropped += removed
+        return removed
+
+    def _filter_verbatim(self, needles: list[str]) -> int:
+        """对透传规则施加同一套过滤，返回删除条数。
+
+        逻辑规则**整条**丢弃：从 AND/OR 里摘掉一个条件会改变整条规则的语义，
+        这和 :func:`srsbox.parse._feed_logical` 里"绝不产出残缺逻辑规则"是同一条
+        原则。
+
+        其余透传规则逐值过滤，但**某个字段被过滤空了同样整条丢弃**：单条
+        sing-box 规则里的多个字段是 AND 关系，删掉一个空字段等于去掉一个条件，
+        规则会匹配到比原来更多的流量 —— 还是同一条原则。字段里只是少了几个值
+        不属于这种情况（同字段内的值是 OR，少一个只会匹配得更少），
+        与 ``plain`` 的处理一致。
+        """
+        kept_rules: list[dict[str, Any]] = []
+        removed = 0
+        for rule in self.verbatim:
+            if rule.get("type") == "logical":
+                if _rule_hits(rule, needles):
+                    removed += 1
+                else:
+                    kept_rules.append(rule)
+                continue
+
+            new_rule: dict[str, Any] = {}
+            emptied = False
+            for key, value in rule.items():
+                if isinstance(value, list):
+                    kept = [
+                        v
+                        for v in value
+                        if not (isinstance(v, str) and _hits(v, needles))
+                    ]
+                    removed += len(value) - len(kept)
+                    emptied = emptied or (bool(value) and not kept)
+                    new_rule[key] = kept
+                else:
+                    new_rule[key] = value
+            if emptied:
+                continue
+            kept_rules.append(new_rule)
+
+        self.verbatim = kept_rules
+        self._verbatim_keys = {_rule_key(rule) for rule in kept_rules}
         return removed
 
     def aggregate_cidr(self) -> int:

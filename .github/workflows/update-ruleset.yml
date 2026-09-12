@@ -43,21 +43,53 @@ jobs:
 
       - run: pip install -e .
 
+      # key 只取版本和平台。用 hashFiles('config.json') 的话，加一个规则集
+      # 就会让 20MB 的二进制缓存失效，白下一次。
+      - name: Resolve sing-box build
+        id: singbox
+        run: |
+          set -euo pipefail
+          echo "key=$(jq -r '.sing_box.version + "-" + .sing_box.platform' config.json)" \
+            >> "$GITHUB_OUTPUT"
+
       # 二进制放在版本化目录里，换版本自然失效，不必手动清理
       - name: Cache sing-box
         uses: actions/cache@v6
         with:
           path: .cache/sing-box
-          key: sing-box-${{ hashFiles('config.json') }}
+          key: sing-box-${{ steps.singbox.outputs.key }}
 
+      # 单个源失败不是 CI 失败：srsbox 逐规则集隔离，照常退出 0。
+      # 只有一个规则集都没产出（真·基础设施坏了）才会退出 1 并让这一步红。
       - name: Generate rulesets
-        run: srsbox
+        run: srsbox --report-json run-report.json
 
-      - name: Verify output
+      - name: Summarize run
+        if: always()
         run: |
-          test -n "$(ls -A output/srs 2>/dev/null)" || { echo "output/srs 为空"; exit 1; }
-          test -n "$(ls -A output/json 2>/dev/null)" || { echo "output/json 为空"; exit 1; }
-          echo "srs: $(ls output/srs | wc -l) 个, json: $(ls output/json | wc -l) 个"
+          set -euo pipefail
+          test -f run-report.json || { echo "没有生成运行报告"; exit 1; }
+
+          ok=$(jq -r '.counts.ok' run-report.json)
+          failed=$(jq -r '.counts.failed' run-report.json)
+          configured=$(jq -r '.counts.configured' run-report.json)
+
+          {
+            echo "## 规则集 $ok / $configured"
+            echo
+            if [ "$failed" -gt 0 ]; then
+              echo "本次未更新（将保留上一次发布的文件）："
+              echo
+              jq -r '.rulesets[] | select(.status == "failed")
+                     | "- `\(.name)` — \(.error // "源不可用")"' run-report.json
+            else
+              echo "全部规则集更新成功。"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          jq -r '.rulesets[] | select(.status == "failed")
+                 | "::warning title=规则集未更新::\(.name): \(.error // "源不可用")"' \
+            run-report.json
 
       - name: Publish
         env:
@@ -65,15 +97,61 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          REMOTE="https://x-access-token:${TOKEN}@github.com/${REPO}"
+
+          # 配置声明的全集 —— 不在其中的已发布文件是孤儿（改名或删除留下的）
+          jq -r '.rulesets[].name' run-report.json > configured.txt
+          # 本次真正产出的 —— 其余（源失败、或被 --only 跳过）保留上一次的文件
+          jq -r '.rulesets[] | select(.status == "ok") | .name' run-report.json > produced.txt
+
           publish() {
-            local dir="$1" branch="$2"
-            git -C "$dir" init -q -b "$branch"
-            git -C "$dir" config user.name "github-actions[bot]"
-            git -C "$dir" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git -C "$dir" add -A
-            git -C "$dir" commit -q -m "update ${branch%_release} ($(date -u +%F))"
-            git -C "$dir" push -f -q "https://x-access-token:${TOKEN}@github.com/${REPO}" "$branch"
-            echo "已推送 $branch"
+            local src="$1" branch="$2" ext="$3"
+            local work name kept=0 orphan=0 fresh=0
+
+            work="$(mktemp -d)"
+            if git clone -q --depth 1 --branch "$branch" "$REMOTE" "$work" 2>/dev/null; then
+              :
+            else
+              git init -q -b "$branch" "$work"
+              git -C "$work" remote add origin "$REMOTE"
+            fi
+
+            # 1) 清孤儿：配置里已经没有这个名字了，说明是刻意删除或改名
+            shopt -s nullglob
+            for f in "$work"/*."$ext"; do
+              name="$(basename "$f" ".$ext")"
+              if grep -qxF -- "$name" configured.txt; then
+                kept=$((kept + 1))
+              else
+                rm -f "$f"
+                orphan=$((orphan + 1))
+                echo "  清理孤儿 $name.$ext"
+              fi
+            done
+
+            # 2) 覆盖本次产出；没产出的名字保持上一次的文件不动
+            while read -r name; do
+              [ -n "$name" ] || continue
+              cp "$src/$name.$ext" "$work/$name.$ext"
+              fresh=$((fresh + 1))
+            done < produced.txt
+
+            local stale=$((kept - fresh))
+            [ "$stale" -lt 0 ] && stale=0
+            echo "  $branch: 更新 $fresh，保留 $stale，清理孤儿 $orphan"
+
+            git -C "$work" add -A
+            if git -C "$work" diff --cached --quiet; then
+              echo "  $branch 无变化，跳过推送"
+              return 0
+            fi
+            git -C "$work" \
+              -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -q -m "update ${branch%_release} ($(date -u +%F)): $fresh updated, $stale retained"
+            git -C "$work" push -q origin "$branch"
+            echo "  已推送 $branch"
           }
-          publish output/srs srs_release
-          publish output/json json_release
+
+          publish output/srs srs_release srs
+          publish output/json json_release json

@@ -1,4 +1,5 @@
 import json
+import re
 
 import pytest
 
@@ -55,6 +56,24 @@ class TestTypedEntries:
         rs = run(r"DOMAIN-REGEX,^a#b\.com$")
         assert rs.plain["domain_regex"] == {r"^a#b\.com$"}
 
+    @pytest.mark.parametrize(
+        "line,expected",
+        [
+            # 量词、字符组、分组里的逗号都属于正则本身，不是策略列分隔符
+            (r"DOMAIN-REGEX,^a{1,3}\.com$", r"^a{1,3}\.com$"),
+            (r"DOMAIN-REGEX,^[a,b]\.com$", r"^[a,b]\.com$"),
+            (r"DOMAIN-REGEX,^(x|y){2,}\.com$", r"^(x|y){2,}\.com$"),
+            # 最外层的逗号才是策略列
+            (r"DOMAIN-REGEX,^a{1,3}\.com$,PROXY", r"^a{1,3}\.com$"),
+            (r"DOMAIN-REGEX,^ad\.com$,DIRECT", r"^ad\.com$"),
+            # 转义的逗号不算分隔符
+            (r"DOMAIN-REGEX,^a\,b$", r"^a\,b$"),
+        ],
+    )
+    def test_regex_is_not_truncated_at_inner_commas(self, line, expected):
+        # 截断后的正则仍然合法、仍能编译，只是匹配的东西变了
+        assert run(line).plain["domain_regex"] == {expected}
+
 
 class TestBareEntries:
     def test_kind_decided_per_entry_not_per_file(self):
@@ -78,6 +97,38 @@ class TestBareEntries:
         assert rs.total == 0
         assert rs.diag.invalid_total == 1
 
+    @pytest.mark.parametrize("host", ["bad.cc", "cafe.fee", "dead.beef", "ab.cd"])
+    def test_hex_looking_domains_are_not_mistaken_for_ips(self, host):
+        # 纯 0-9a-f 的域名靠字符集判断会被误当成 IP，然后作为非法值丢掉
+        rs = run(host)
+        assert rs.plain["domain"] == {host}
+        assert rs.diag.invalid_total == 0
+
+    def test_ip_detection_still_works(self):
+        rs = run("8.8.8.8\n2001:db8::/32\n10.0.0.0/8")
+        assert rs.counts() == {"ip_cidr": 3}
+
+    def test_wildcard_becomes_an_exact_single_label_regex(self):
+        # 直接写进 domain 会变成字面量，永不命中
+        rs = run("*.example.com")
+        assert rs.plain["domain_regex"] == {r"^[^.]+\.example\.com$"}
+
+    def test_wildcard_regex_matches_one_label_only(self):
+        pattern = next(iter(run("*.example.com").plain["domain_regex"]))
+        assert re.match(pattern, "a.example.com")
+        # Clash 的 * 严格匹配一个 label：这两个都不该命中
+        assert not re.match(pattern, "example.com")
+        assert not re.match(pattern, "a.b.example.com")
+
+    def test_wildcard_in_the_middle(self):
+        rs = run("api.*.example.com")
+        assert rs.plain["domain_regex"] == {r"^api\.[^.]+\.example\.com$"}
+
+    def test_partial_label_wildcard_is_recorded_not_guessed(self):
+        # ad*.example.com 不是我们认识的写法，记成非法值而不是猜
+        rs = run("ad*.example.com")
+        assert rs.total == 0 and rs.diag.invalid_total == 1
+
 
 class TestLogical:
     def test_and_rule(self):
@@ -86,7 +137,7 @@ class TestLogical:
             {
                 "type": "logical",
                 "mode": "and",
-                "rules": [{"domain": ["a.com"]}, {"port": ["443"]}],
+                "rules": [{"domain": ["a.com"]}, {"port": [443]}],
             }
         ]
 
@@ -94,6 +145,44 @@ class TestLogical:
         rs = run("NOT,((DOMAIN,a.com))")
         rule = rs.to_json()["rules"][0]
         assert rule["mode"] == "and" and rule["invert"] is True
+
+    def test_child_port_is_an_int_not_a_string(self):
+        # 字符串端口会让 sing-box 拒绝编译整个规则集：
+        #   FATAL rules[0].rules[1].port: cannot unmarshal string into uint16
+        rs = run("AND,((DOMAIN,a.com),(DST-PORT,443))")
+        port = rs.to_json()["rules"][0]["rules"][1]["port"][0]
+        assert port == 443 and isinstance(port, int)
+
+    def test_child_values_are_normalized_like_plain_ones(self):
+        rs = run("AND,((DOMAIN,Example.COM.),(IP-CIDR,1.2.3.4/24))")
+        assert rs.to_json()["rules"][0]["rules"] == [
+            {"domain": ["example.com"]},
+            {"ip_cidr": ["1.2.3.0/24"]},
+        ]
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "AND,((DOMAIN,a.com),(GEOIP,CN))",  # 认识但表达不了
+            "AND,((DOMAIN,a.com),(MADE-UP,x))",  # 根本不认识
+            "AND,((DOMAIN,a.com),(IP-CIDR,not-an-ip))",  # 取值非法
+            "AND,((DOMAIN,a.com),(DST-PORT,99999))",  # 端口越界
+        ],
+    )
+    def test_unusable_child_drops_the_whole_rule(self, text):
+        # 少一个子项的 AND 是另一条规则：匹配面被放宽，比丢掉更危险
+        rs = run(text)
+        assert rs.total == 0
+        assert rs.diag.invalid_total == 1
+        assert "整条逻辑规则丢弃" in rs.diag.invalid_samples[0]
+
+    def test_malformed_logical_rule_is_recorded(self):
+        rs = run("AND,nonsense")
+        assert rs.total == 0 and rs.diag.invalid_total == 1
+
+    def test_strict_format_rejects_logical_rules(self):
+        with pytest.raises(ParseError, match="严格格式不允许逻辑规则"):
+            run("AND,((DOMAIN,a.com),(DST-PORT,443))", Format.CIDR)
 
 
 class TestSingbox:
