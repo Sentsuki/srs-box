@@ -2,7 +2,7 @@
   "schema": 1,
   "ruleset_version": 4,
   "sing_box": {
-    "version": "1.13.14",
+    "version": "1.14.0",
     "platform": "linux-amd64"
   },
   "output": {
