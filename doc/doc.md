@@ -1,130 +1,114 @@
-# 使用说明
+# 配置说明
 
-## 配置规则集
-
-编辑项目根目录的 `config.json`。
+配置文件默认位于项目根目录 `config.json`，可通过 `-c` 指定路径。
 
 ```json
 {
-  "ip_only": {
-    "telegram-ip": [
-      "https://core.telegram.org/resources/cidr.txt"
-    ]
-  },
-  "rulesets": {
-    "example-json": [
-      "https://example.com/rule-set.json"
-    ]
-  },
-  "convert": {
-    "example-clash": [
-      "https://example.com/rules.list"
-    ]
-  },
-  "sing_box": {
-    "version": "1.13.3",
-    "platform": "linux-amd64"
-  },
-  "output": {
-    "json_dir": "output/json",
-    "srs_dir": "output/srs"
-  },
-  "logging": {
-    "level": "SUCCESS",
-    "enable_color": true,
-    "show_progress": true
-  },
-  "version": 4
+  "schema": 1,
+  "ruleset_version": 4,
+  "sing_box": { "version": "1.13.14", "platform": "linux-amd64" },
+  "output": { "json_dir": "output/json", "srs_dir": "output/srs" },
+  "fetch": { "concurrency": 8, "timeout": 30, "retries": 3 },
+  "rulesets": { }
 }
 ```
 
-规则集名称会直接作为输出文件名，请使用不会与其他规则集重复的名称。
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `schema` | 是 | 配置文件格式版本，固定为 `1` |
+| `ruleset_version` | 是 | 目标 sing-box rule-set 版本 |
+| `sing_box.version` | 是 | 编译所用的 sing-box 版本（对应 GitHub Releases） |
+| `sing_box.platform` | 是 | 平台架构，如 `linux-amd64`、`windows-amd64`、`darwin-arm64` |
+| `output.*` | 否 | 输出目录，默认 `output/json` 与 `output/srs` |
+| `fetch.*` | 否 | 网络配置，默认并发 8、超时 30 秒、重试 3 次 |
+| `rulesets` | 是 | 规则集定义 |
 
-### `ip_only`
+## rulesets
 
-用于纯 IP/CIDR 列表。每个键是一套规则集，值为一个或多个文本文件 URL。程序会合并、去重并排序各文件中非空且不以 `#` 开头的行，生成 `ip_cidr` 规则。
+键名即输出文件名。同名下的多个源会自动合并去重。
+
+### 单个规则集
+
+简写（仅需指定 URL 或 URL 列表）：
 
 ```json
-"ip_only": {
-  "cn-ip": [
-    "https://example.com/china-ipv4.txt",
-    "https://example.com/china-ipv6.txt"
-  ]
-}
+"block-ads": ["https://example.com/ads.json"],
+"skk-reject": [
+  "https://ruleset.skk.moe/sing-box/domainset/reject.json",
+  "https://ruleset.skk.moe/sing-box/non_ip/reject.json"
+]
 ```
 
-### `rulesets`
-
-用于已经是 sing-box JSON 格式的规则集。每个 URL 都会按 JSON 下载；同一名称下的多个文件会按规则字段合并并去重。不要在这里填写 Clash `.list`、YAML 或普通域名列表。
+完整对象配置：
 
 ```json
-"rulesets": {
-  "apple": [
-    "https://example.com/apple.json"
-  ]
+"cn-ip": {
+  "format": "cidr",
+  "aggregate": true,
+  "base": "https://example.com/ip-lists/",
+  "sources": ["chinanet46.txt", "cmcc46.txt"]
 }
 ```
 
-### `convert`
+| 键 | 说明 |
+| --- | --- |
+| `sources` | URL 或 URL 数组（若指定 `base` 则可写相对路径），必填 |
+| `base` | 公共 URL 前缀 |
+| `format` | 规则格式，默认 `singbox`，详见下文 |
+| `aggregate` | 是否合并相邻/包含的 CIDR（仅对 IP 生效），默认 `false` |
 
-用于 Clash `.list` 或 YAML 的 `payload` 规则。支持 `DOMAIN`、`DOMAIN-SUFFIX`、`DOMAIN-KEYWORD`、`IP-CIDR`、`IP-CIDR6`、`GEOIP`、端口和正则等常见规则类型；不支持的类型会跳过。
+### 规则集分组
+
+通过 `items` 将共享前缀或公共配置的规则集归组。组名自动作为输出文件名前缀：
 
 ```json
-"convert": {
-  "ads": [
-    "https://example.com/ads.list",
-    "https://example.com/extra.yaml"
-  ]
+"skk": {
+  "base": "https://ruleset.skk.moe/sing-box/",
+  "items": {
+    "ai": "non_ip/ai.json",
+    "stream-jp": "non_ip/stream_jp.json",
+    "reject": ["domainset/reject.json", "non_ip/reject.json"]
+  }
 }
 ```
 
-### 输出和日志（可选）
+展开为 `skk-ai`、`skk-stream-jp`、`skk-reject`。如需自定义前缀或无需前缀，可指定 `"prefix": ""`。
 
-- `output.json_dir`：中间 JSON 规则集目录，默认 `output/json`。
-- `output.srs_dir`：最终 `.srs` 文件目录，默认 `output/srs`。
-- `logging.level`：可设为 `DEBUG`、`INFO`、`SUCCESS`、`WARNING` 或 `ERROR`；默认 `INFO`。
-- `logging.enable_color`：是否使用彩色日志。
-- `logging.show_progress`：是否显示下载进度。
+## format
 
-## 生成规则集
+指定源文件的容器格式，默认 `singbox`。
 
-在项目根目录执行：
+| 取值 | 格式 | 适用场景 |
+| --- | --- | --- |
+| `singbox` | JSON | sing-box rule-set（默认） |
+| `text` | 纯文本行 | Clash / Surge / Quantumult X 的 `.list` 规则或纯文本行 |
+| `yaml` | YAML | 含 `payload` / `rules` 列表的 YAML 配置 |
+| `cidr` | 纯文本行 | 严格模式：仅允许 IP/CIDR，混入其他内容即报错 |
+| `domainset` | 纯文本行 | 严格模式：仅允许域名，混入其他内容即报错 |
+
+- `text` 与 `yaml` 支持自动识别：带策略类型的规则（如 `DOMAIN-SUFFIX,example.com,PROXY`）、裸 IP/CIDR（如 `1.2.3.0/24`）以及裸域名（如 `+.example.com`）。
+- 不支持的规则类型（如 `GEOIP`、`IP-ASN`、`USER-AGENT` 等）会自动跳过并计入执行摘要。
+
+## 命令行
 
 ```bash
-python main.py
+srsbox [-c CONFIG] [--only NAME] [-n] [--strict] [--sing-box PATH] [-v|-q]
 ```
 
-程序依次下载规则源、生成 JSON、下载 sing-box、编译 `.srs`，完成后会显示生成文件和失败原因。只要至少有一个规则集成功编译，命令会以成功状态结束。
+| 参数 | 说明 |
+| --- | --- |
+| `-c, --config` | 配置文件路径，默认 `config.json` |
+| `--only NAME` | 仅处理指定规则集（支持多次指定） |
+| `-n, --dry-run` | 仅生成 JSON，跳过 sing-box 下载与编译 |
+| `--strict` | 任一规则集失败即退出码非零 |
+| `--sing-box PATH` | 使用本地二进制路径，跳过自动下载（也可使用环境变量 `SING_BOX_BIN`） |
+| `-v` / `-vv` | 详细日志（`-vv` 显示 HTTP 抓取详情） |
+| `-q` | 静默模式，仅输出警告和错误 |
 
-## 获取生成文件
-
-默认输出如下：
-
-```text
-output/
-├── json/
-│   ├── cn-ip.json
-│   ├── apple.json
-│   └── ads.json
-└── srs/
-    ├── cn-ip.srs
-    ├── apple.srs
-    └── ads.srs
-```
-
-## 更新规则
-
-无需删除旧输出。更新 `config.json` 中的 URL 或保持原配置，重新执行：
-
-```bash
-python main.py
-```
-
-同名文件会在生成时覆盖。临时下载文件、缓存和本次下载的 sing-box 程序会在流程结束时自动清理；`output/` 中的规则文件会保留。
+**退出码**：`0` 至少一个规则集成功；`1` 全部失败或 `--strict` 下存在失败；`2` 配置/参数错误；`130` 用户中断。
 
 ## 常见问题
 
-- **JSON 规则集下载失败**：确认 `rulesets` 中的链接实际返回 JSON，而不是 `.list`、YAML 或网页。
-- **YAML 规则未被识别**：安装 PyYAML：`python -m pip install pyyaml`。
-- **sing-box 下载或启动失败**：确认网络可访问 GitHub Releases，并检查 `sing_box.version` 是否存在、`sing_box.platform` 是否与运行环境匹配。
-- **没有任何文件生成**：至少配置一项 `ip_only`、`rulesets` 或 `convert`，并确认其中至少一个来源可访问。
+- **报错期望 sing-box JSON**：源文件非 JSON 格式，按内容格式显式声明 `"format": "text"` 或 `"yaml"`。
+- **避免重复下载 sing-box**：二进制会缓存在 `.cache/sing-box/<版本>-<平台>/`。CI 中可缓存该目录，或通过 `--sing-box` / `SING_BOX_BIN` 指定预装路径。
+- **单个规则集失败**：默认各规则集互不影响，其余规则集正常生成与编译。

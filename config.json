@@ -1,16 +1,18 @@
 {
-  "ip_only": {
-    "cn-ip": [
-      "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/chinanet46.txt",
-      "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cmcc46.txt",
-      "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/unicom46.txt",
-      "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cernet46.txt",
-      "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cstnet46.txt",
-      "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/drpeng46.txt"
-    ],
-    "telegram-ip": [
-      "https://core.telegram.org/resources/cidr.txt"
-    ]
+  "schema": 1,
+  "ruleset_version": 4,
+  "sing_box": {
+    "version": "1.14.0",
+    "platform": "linux-amd64"
+  },
+  "output": {
+    "json_dir": "output/json",
+    "srs_dir": "output/srs"
+  },
+  "fetch": {
+    "concurrency": 8,
+    "timeout": 30,
+    "retries": 3
   },
   "rulesets": {
     "apple-ai": [
@@ -19,169 +21,110 @@
     "block-ads": [
       "https://github.com/TG-Twilight/AWAvenue-Ads-Rule/raw/refs/heads/main/Filters/AWAvenue-Ads-Rule-Singbox.json"
     ],
-    "apple-api": [
-      "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/api-domain.list"
-    ],
-    "apple-api-ip": [
-      "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/api-ip.list"
-    ],
-    "apple-cdn": [
-      "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/cdn-domain.list"
-    ],
-    "apple-rules": [
-      "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/domain.list"
-    ],
-    "apple-nocn-cdn": [
-      "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/no-cn-cdn-domain.list"
-    ],
-    "apple-update": [
-      "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/update-domain.list"
-    ],
-    "skk-apple-cdn": [
-      "https://ruleset.skk.moe/sing-box/domainset/apple_cdn.json",
-      "https://ruleset.skk.moe/sing-box/non_ip/apple_cdn.json"
-    ],
-    "skk-cdn": [
-      "https://ruleset.skk.moe/sing-box/domainset/cdn.json",
-      "https://ruleset.skk.moe/sing-box/non_ip/cdn.json"
-    ],
-    "skk-download": [
-      "https://ruleset.skk.moe/sing-box/domainset/download.json",
-      "https://ruleset.skk.moe/sing-box/non_ip/download.json"
-    ],
-    "skk-game-download": [
-      "https://ruleset.skk.moe/sing-box/domainset/game-download.json"
-    ],
-    "skk-icloud-private-relay": [
-      "https://ruleset.skk.moe/sing-box/domainset/icloud_private_relay.json"
-    ],
-    "skk-reject": [
-      "https://ruleset.skk.moe/sing-box/domainset/reject.json",
-      "https://ruleset.skk.moe/sing-box/non_ip/reject.json"
-    ],
-    "skk-reject-extra": [
-      "https://ruleset.skk.moe/sing-box/domainset/reject_extra.json"
-    ],
-    "skk-speedtest": [
-      "https://ruleset.skk.moe/sing-box/domainset/speedtest.json"
-    ],
-    "skk-ai": [
-      "https://ruleset.skk.moe/sing-box/non_ip/ai.json"
-    ],
-    "skk-apple-cn": [
-      "https://ruleset.skk.moe/sing-box/non_ip/apple_cn.json"
-    ],
-    "skk-apple-services": [
-      "https://ruleset.skk.moe/sing-box/non_ip/apple_services.json"
-    ],
-    "skk-cloudmounter": [
-      "https://ruleset.skk.moe/sing-box/non_ip/cloudmounter.json"
-    ],
-    "skk-direct": [
-      "https://ruleset.skk.moe/sing-box/non_ip/direct.json"
-    ],
-    "skk-domestic": [
-      "https://ruleset.skk.moe/sing-box/non_ip/domestic.json"
-    ],
-    "skk-gitlab": [
-      "https://ruleset.skk.moe/sing-box/non_ip/gitlab.json"
-    ],
-    "skk-global": [
-      "https://ruleset.skk.moe/sing-box/non_ip/global.json"
-    ],
-    "skk-lan": [
-      "https://ruleset.skk.moe/sing-box/non_ip/lan.json"
-    ],
-    "skk-microsoft": [
-      "https://ruleset.skk.moe/sing-box/non_ip/microsoft.json"
-    ],
-    "skk-microsoft-cdn": [
-      "https://ruleset.skk.moe/sing-box/non_ip/microsoft_cdn.json"
-    ],
-    "skk-my-direct": [
-      "https://ruleset.skk.moe/sing-box/non_ip/my_direct.json"
-    ],
-    "skk-my-git": [
-      "https://ruleset.skk.moe/sing-box/non_ip/my_git.json"
-    ],
-    "skk-my-plus": [
-      "https://ruleset.skk.moe/sing-box/non_ip/my_plus.json"
-    ],
-    "skk-my-proxy": [
-      "https://ruleset.skk.moe/sing-box/non_ip/my_proxy.json"
-    ],
-    "skk-my-reject": [
-      "https://ruleset.skk.moe/sing-box/non_ip/my_reject.json"
-    ],
-    "skk-my-us": [
-      "https://ruleset.skk.moe/sing-box/non_ip/my_us.json"
-    ],
-    "skk-neteasemusic": [
-      "https://ruleset.skk.moe/sing-box/non_ip/neteasemusic.json"
-    ],
-    "skk-reject-drop": [
-      "https://ruleset.skk.moe/sing-box/non_ip/reject-drop.json"
-    ],
-    "skk-reject-no-drop": [
-      "https://ruleset.skk.moe/sing-box/non_ip/reject-no-drop.json"
-    ],
-    "skk-reject-url-regex": [
-      "https://ruleset.skk.moe/sing-box/non_ip/reject-url-regex.json"
-    ],
-    "skk-sogouinput": [
-      "https://ruleset.skk.moe/sing-box/non_ip/sogouinput.json"
-    ],
-    "skk-stream": [
-      "https://ruleset.skk.moe/sing-box/non_ip/stream.json"
-    ],
-    "skk-stream-biliintl": [
-      "https://ruleset.skk.moe/sing-box/non_ip/stream_biliintl.json"
-    ],
-    "skk-stream-eu": [
-      "https://ruleset.skk.moe/sing-box/non_ip/stream_eu.json"
-    ],
-    "skk-stream-hk": [
-      "https://ruleset.skk.moe/sing-box/non_ip/stream_hk.json"
-    ],
-    "skk-stream-jp": [
-      "https://ruleset.skk.moe/sing-box/non_ip/stream_jp.json"
-    ],
-    "skk-stream-kr": [
-      "https://ruleset.skk.moe/sing-box/non_ip/stream_kr.json"
-    ],
-    "skk-stream-tw": [
-      "https://ruleset.skk.moe/sing-box/non_ip/stream_tw.json"
-    ],
-    "skk-stream-us": [
-      "https://ruleset.skk.moe/sing-box/non_ip/stream_us.json"
-    ],
-    "skk-telegram": [
-      "https://ruleset.skk.moe/sing-box/non_ip/telegram.json"
-    ]
-  },
-  "convert": {
-    "block-dns": [
-      "https://raw.githubusercontent.com/VirgilClyne/GetSomeFries/main/ruleset/HTTPDNS.Block.yaml"
-    ],
-    "normal-ai": [
-      "https://raw.githubusercontent.com/viewer12/OverseasAI.list/main/rule/Clash/OverseasAI/OverseasAI.list"
-    ],
-    "riot": [
-      "https://github.com/LM-Firefly/Rules/raw/refs/heads/master/Game/Riot.list"
-    ]
-  },
-  "sing_box": {
-    "version": "1.13.14",
-    "platform": "linux-amd64"
-  },
-  "logging": {
-    "level": "SUCCESS",
-    "enable_color": true,
-    "show_progress": true
-  },
-  "output": {
-    "json_dir": "output/json",
-    "srs_dir": "output/srs"
-  },
-  "version": 4
+    "cn-ip": {
+      "format": "cidr",
+      "aggregate": true,
+      "base": "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/",
+      "sources": [
+        "chinanet46.txt",
+        "cmcc46.txt",
+        "unicom46.txt",
+        "cernet46.txt",
+        "cstnet46.txt",
+        "drpeng46.txt"
+      ]
+    },
+    "telegram-ip": {
+      "format": "cidr",
+      "aggregate": true,
+      "sources": [
+        "https://core.telegram.org/resources/cidr.txt"
+      ]
+    },
+    "block-dns": {
+      "format": "yaml",
+      "sources": [
+        "https://raw.githubusercontent.com/VirgilClyne/GetSomeFries/main/ruleset/HTTPDNS.Block.yaml"
+      ]
+    },
+    "normal-ai": {
+      "format": "text",
+      "sources": [
+        "https://raw.githubusercontent.com/viewer12/OverseasAI.list/main/rule/Clash/OverseasAI/OverseasAI.list"
+      ]
+    },
+    "riot": {
+      "format": "text",
+      "sources": [
+        "https://github.com/LM-Firefly/Rules/raw/refs/heads/master/Game/Riot.list"
+      ]
+    },
+    "apple": {
+      "base": "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/",
+      "items": {
+        "api": "api-domain.list",
+        "api-ip": "api-ip.list",
+        "cdn": "cdn-domain.list",
+        "rules": "domain.list",
+        "nocn-cdn": "no-cn-cdn-domain.list",
+        "update": "update-domain.list"
+      }
+    },
+    "skk": {
+      "base": "https://ruleset.skk.moe/sing-box/",
+      "items": {
+        "apple-cdn": [
+          "domainset/apple_cdn.json",
+          "non_ip/apple_cdn.json"
+        ],
+        "cdn": [
+          "domainset/cdn.json",
+          "non_ip/cdn.json"
+        ],
+        "download": [
+          "domainset/download.json",
+          "non_ip/download.json"
+        ],
+        "game-download": "domainset/game-download.json",
+        "icloud-private-relay": "domainset/icloud_private_relay.json",
+        "reject": [
+          "domainset/reject.json",
+          "non_ip/reject.json"
+        ],
+        "reject-extra": "domainset/reject_extra.json",
+        "speedtest": "domainset/speedtest.json",
+        "ai": "non_ip/ai.json",
+        "apple-cn": "non_ip/apple_cn.json",
+        "apple-services": "non_ip/apple_services.json",
+        "cloudmounter": "non_ip/cloudmounter.json",
+        "direct": "non_ip/direct.json",
+        "domestic": "non_ip/domestic.json",
+        "gitlab": "non_ip/gitlab.json",
+        "global": "non_ip/global.json",
+        "lan": "non_ip/lan.json",
+        "microsoft": "non_ip/microsoft.json",
+        "microsoft-cdn": "non_ip/microsoft_cdn.json",
+        "my-direct": "non_ip/my_direct.json",
+        "my-git": "non_ip/my_git.json",
+        "my-plus": "non_ip/my_plus.json",
+        "my-proxy": "non_ip/my_proxy.json",
+        "my-reject": "non_ip/my_reject.json",
+        "my-us": "non_ip/my_us.json",
+        "neteasemusic": "non_ip/neteasemusic.json",
+        "reject-drop": "non_ip/reject-drop.json",
+        "reject-no-drop": "non_ip/reject-no-drop.json",
+        "reject-url-regex": "non_ip/reject-url-regex.json",
+        "sogouinput": "non_ip/sogouinput.json",
+        "stream": "non_ip/stream.json",
+        "stream-biliintl": "non_ip/stream_biliintl.json",
+        "stream-eu": "non_ip/stream_eu.json",
+        "stream-hk": "non_ip/stream_hk.json",
+        "stream-jp": "non_ip/stream_jp.json",
+        "stream-kr": "non_ip/stream_kr.json",
+        "stream-tw": "non_ip/stream_tw.json",
+        "stream-us": "non_ip/stream_us.json",
+        "telegram": "non_ip/telegram.json"
+      }
+    }
+  }
 }

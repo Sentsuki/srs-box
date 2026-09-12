@@ -1,17 +1,42 @@
+[project]
+name = "srs-box"
+version = "0.2.0"
+description = "把各家规则源编译成 sing-box rule-set"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+dependencies = [
+    "httpx[http2]>=0.27",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "black>=24.0",
+    "isort>=5.13",
+    "flake8>=7.0",
+]
+
+[project.scripts]
+srsbox = "srsbox.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["srsbox*"]
+
 [tool.black]
 line-length = 88
-target-version = ['py313']
-include = '\.py$'
-exclude = '''
-/(
-    \.venv
-  | venv
-  | site-packages
-)/
-'''
+target-version = ['py311']
 
 [tool.isort]
 profile = "black"
 line_length = 88
-src_paths = ["src", "main.py"]
-skip = ["venv", "site-packages"]
+src_paths = ["srsbox", "tests"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

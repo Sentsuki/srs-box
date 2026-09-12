@@ -1,5 +1,4 @@
 [flake8]
 max-line-length = 88
 extend-ignore = E203, W503
-extend-exclude = venv/*, site-packages/*
-include = src/*.py, main.py
+extend-exclude = .venv,venv,old_src,build,dist,*.egg-info

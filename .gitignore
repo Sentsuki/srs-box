@@ -188,3 +188,8 @@ ai
 Thumbs.db
 .kiro/
 output/
+# srs-box
+.cache/
+baseline/
+config.old.json.bak
+*.egg-info/
