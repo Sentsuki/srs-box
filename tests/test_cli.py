@@ -4,7 +4,7 @@ from srsbox import cli
 from srsbox.config import Ruleset
 from srsbox.fetch import Fetched
 from srsbox.parse import Format
-from srsbox.report import Result, summarize
+from srsbox.report import Result, run_report, summarize
 
 
 def ok(url, text):
@@ -134,3 +134,65 @@ class TestSummary:
         summarize([Result(name="a", error="炸了")], compiled=False)
         out = capsys.readouterr().out
         assert "✗ a" in out and "炸了" in out
+
+
+class TestRunReport:
+    """发布流程靠这份报告区分「源挂了」和「配置里删了」。"""
+
+    def _report(self, results, configured, selected):
+        return run_report(results, configured=configured, selected=selected)
+
+    def test_status_per_ruleset(self):
+        report = self._report(
+            [Result(name="a", ok=True, rules=7), Result(name="b", error="炸了")],
+            ["a", "b"],
+            {"a", "b"},
+        )
+        assert report["counts"] == {
+            "ok": 1,
+            "failed": 1,
+            "skipped": 0,
+            "configured": 2,
+        }
+        by_name = {e["name"]: e for e in report["rulesets"]}
+        assert by_name["a"]["status"] == "ok" and by_name["a"]["rules"] == 7
+        assert by_name["b"]["status"] == "failed" and by_name["b"]["error"] == "炸了"
+
+    def test_unselected_rulesets_are_skipped_not_failed(self):
+        # --only 跑一个规则集时，其余的必须是 skipped：
+        # 发布方要像对待失败项一样保留它们，否则一次 --only 就删光其余全部
+        report = self._report([Result(name="a", ok=True)], ["a", "b", "c"], {"a"})
+        statuses = {e["name"]: e["status"] for e in report["rulesets"]}
+        assert statuses == {"a": "ok", "b": "skipped", "c": "skipped"}
+        assert report["counts"]["failed"] == 0
+
+    def test_configured_set_drives_the_report_not_the_results(self):
+        # 配置里删掉的规则集不会出现在报告里 —— 发布方据此判定孤儿
+        report = self._report([Result(name="gone", ok=True)], ["kept"], {"kept"})
+        assert [e["name"] for e in report["rulesets"]] == ["kept"]
+
+    def test_failed_sources_are_carried_through(self):
+        result = Result(name="a", ok=True, rules=1, failed_sources=["u2 (HTTP 502)"])
+        report = self._report([result], ["a"], {"a"})
+        assert report["rulesets"][0]["failed_sources"] == ["u2 (HTTP 502)"]
+
+    def test_written_to_disk_on_request(self, tmp_path, monkeypatch, capsys):
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps(TestPipeline()._config(tmp_path)), encoding="utf-8")
+        TestPipeline()._patch_fetch(monkeypatch)
+        target = tmp_path / "nested" / "run-report.json"
+
+        code = cli.main(
+            ["-c", str(path), "--dry-run", "-q", "--report-json", str(target)]
+        )
+
+        assert code == 0
+        payload = json.loads(target.read_text(encoding="utf-8"))
+        assert payload["schema"] == 1
+        assert payload["counts"] == {
+            "ok": 1,
+            "failed": 2,
+            "skipped": 0,
+            "configured": 3,
+        }
+        capsys.readouterr()

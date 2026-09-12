@@ -21,7 +21,7 @@ from .errors import SrsBoxError
 from .fetch import Fetched, fetch_all
 from .models import RuleSet
 from .parse import parse
-from .report import Result, summarize
+from .report import Result, run_report, summarize, write_run_report
 
 log = logging.getLogger("srsbox")
 
@@ -44,6 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict", action="store_true", help="任一规则集失败即以非零码退出"
     )
     parser.add_argument("--sing-box", metavar="PATH", help="使用指定的 sing-box 二进制")
+    parser.add_argument(
+        "--report-json",
+        metavar="PATH",
+        help="把本次运行的机器可读报告写到该路径（供发布流程判断保留/清理）",
+    )
     parser.add_argument(
         "-v", "--verbose", action="count", default=0, help="更详细的日志"
     )
@@ -207,6 +212,16 @@ def run(args: argparse.Namespace) -> int:
                     result.error = str(exc)
 
     summarize(results, compiled=compiled)
+
+    if args.report_json:
+        write_run_report(
+            Path(args.report_json),
+            run_report(
+                results,
+                configured=[r.name for r in cfg.rulesets],
+                selected={s.name for s in specs},
+            ),
+        )
 
     succeeded = sum(1 for r in results if r.ok)
     if succeeded == 0:
