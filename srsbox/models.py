@@ -45,9 +45,17 @@ FIELDS: frozenset[str] = frozenset(FIELD_ORDER)
 _INT_FIELDS = frozenset({"port", "source_port"})
 _CIDR_FIELDS = frozenset({"ip_cidr", "source_ip_cidr"})
 _HOST_FIELDS = frozenset({"domain", "domain_suffix"})
-_VERBATIM_FIELDS = frozenset({"domain_regex"})  # 大小写敏感，不能 lower()
+# 大小写敏感，不能 lower()。
+#
+# 域名可以安全地小写（DNS 本就大小写不敏感），但进程名和路径在 Linux/macOS 上
+# 是大小写敏感的：把 ``Telegram`` 压成 ``telegram`` 会让规则永不命中。
+_VERBATIM_FIELDS = frozenset(
+    {"domain_regex", "process_name", "process_path", "package_name"}
+)
 
-_LABEL = r"(?!-)[A-Za-z0-9_*-]{1,63}(?<!-)"
+# 不含 ``*``：带通配符的值在 sing-box 的 domain/domain_suffix 里是字面量，
+# 永不命中。通配符域名由解析层转成 domain_regex，到不了这里。
+_LABEL = r"(?!-)[A-Za-z0-9_-]{1,63}(?<!-)"
 _DOMAIN_RE = re.compile(rf"^(?=.{{1,253}}$){_LABEL}(?:\.{_LABEL})*$")
 
 MAX_INVALID_SAMPLES = 5

@@ -49,6 +49,26 @@ class TestNormalize:
         # 正则大小写敏感，不能跟域名一样 lower()
         assert normalize("domain_regex", "^AdS?\\.") == "^AdS?\\."
 
+    @pytest.mark.parametrize(
+        "field,value",
+        [
+            ("process_name", "Telegram"),
+            ("process_name", "WeChat.exe"),
+            ("process_path", "/Applications/Surge.app/Contents/MacOS/Surge"),
+            ("package_name", "com.Example.App"),
+        ],
+    )
+    def test_process_and_package_case_is_preserved(self, field, value):
+        # Linux/macOS 上进程名与路径大小写敏感，压成小写等于让规则永不命中
+        assert normalize(field, value) == value
+
+    @pytest.mark.parametrize("field", ["domain", "domain_suffix"])
+    def test_wildcards_rejected_in_host_fields(self, field):
+        # sing-box 的 domain/domain_suffix 不认通配符，写进去就是永不命中的死规则；
+        # 通配符域名由解析层转成 domain_regex，到不了这里
+        with pytest.raises(InvalidValue):
+            normalize(field, "*.example.com")
+
     def test_unknown_field_rejected(self):
         with pytest.raises(InvalidValue):
             normalize("geoip", "CN")

@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import re
 from enum import Enum
+from ipaddress import ip_network
 from typing import Any, Iterable
 
 from .errors import InvalidValue, ParseError
@@ -41,7 +42,9 @@ class Format(str, Enum):
 # 错误页，下载层发现不了），严格模式让它当场暴露而不是混进规则集。
 _STRICT_ALLOW: dict[Format, frozenset[str]] = {
     Format.CIDR: frozenset({"ip_cidr"}),
-    Format.DOMAINSET: frozenset({"domain", "domain_suffix"}),
+    # domain_regex 在列表里：通配符域名（``*.example.com``）是域名列表的常客，
+    # 转换后落在 domain_regex 上。不放行的话，一个通配符就会让整个规则集失败。
+    Format.DOMAINSET: frozenset({"domain", "domain_suffix", "domain_regex"}),
 }
 
 _TYPE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
@@ -86,7 +89,71 @@ def _strip_inline_comment(value: str) -> str:
 
 
 def _looks_like_ip(value: str) -> bool:
-    return bool(_IPISH_RE.match(value)) and any(c in value for c in ".:")
+    """先用字符集快速排除，再用真解析确认。
+
+    只看字符集会把纯十六进制字面的域名误判成 IP —— ``bad.cc``、``cafe.fee``、
+    ``dead.beef`` 全部由 ``0-9a-f.`` 组成。误判的后果不只是丢一条规则：
+    在 domainset 严格模式下 ``_commit`` 会因字段不在白名单而抛错，整个规则集陪葬。
+
+    字符集正则是所有合法 IP 的超集，所以拿它做快速否定不会漏判；真解析只在
+    少数"长得像 IP"的值上跑，几十万行的域名列表不会因此变慢。
+    """
+    if not _IPISH_RE.match(value):
+        return False
+    try:
+        ip_network(value, strict=False)
+    except ValueError:
+        return False
+    return True
+
+
+def _regex_value(rest: str) -> str:
+    """从 ``rest`` 里取出正则值，在第一个**顶层**逗号处截断。
+
+    正则里的逗号几乎总在 ``{m,n}``、``[a,b]`` 或 ``(a|b)`` 内部，而策略列的逗号
+    在最外层。无脑 ``split(",")`` 会把 ``^a{1,3}\\.com$`` 砍成 ``^a{1`` ——
+    砍完仍是合法正则、仍能编译，只是匹配的东西变了，是最难发现的一类错误。
+    """
+    depth = 0
+    escaped = False
+    in_class = False
+    for index, char in enumerate(rest):
+        if escaped:
+            escaped = False
+        elif char == "\\":
+            escaped = True
+        elif in_class:
+            if char == "]":
+                in_class = False
+        elif char == "[":
+            in_class = True
+        elif char in "({":
+            depth += 1
+        elif char in ")}":
+            depth = max(0, depth - 1)
+        elif char == "," and depth == 0:
+            return rest[:index].strip()
+    return rest.strip()
+
+
+def _wildcard_to_regex(host: str) -> str | None:
+    """``*.example.com`` -> ``^[^.]+\\.example\\.com$``；无法处理时返回 None。
+
+    Clash 的 ``*`` 严格匹配**一个** label：``a.example.com`` 命中，
+    ``a.b.example.com`` 和 ``example.com`` 都不命中。sing-box 的
+    domain / domain_suffix 都没有等价写法，只能落到 domain_regex ——
+    用 ``domain_suffix`` 近似会把多级子域也吃进来，那是放宽匹配面。
+
+    只认整段 label 是 ``*`` 的写法；``ad*.example.com`` 这种返回 None，
+    交给上层当普通域名处理（进而被记成非法值），而不是猜。
+    """
+    labels = host.split(".")
+    if not any(label == "*" for label in labels):
+        return None
+    if any("*" in label and label != "*" for label in labels):
+        return None
+    parts = ["[^.]+" if label == "*" else re.escape(label) for label in labels]
+    return "^" + r"\.".join(parts) + "$"
 
 
 # ----------------------------------------------------------------------
@@ -118,15 +185,18 @@ def _feed_bare(value: str, rs: RuleSet, allow: frozenset[str] | None) -> None:
     """裸值：按值自身的形态决定字段，不依赖文件级归类。"""
     if not value:
         return
+    origin = value
     if _looks_like_ip(value):
         field = "ip_cidr"
     elif value.startswith("+."):
         field, value = "domain_suffix", value[2:]
+    elif "*" in value and (pattern := _wildcard_to_regex(value)) is not None:
+        field, value = "domain_regex", pattern
     elif value.startswith("."):
         field, value = "domain_suffix", value[1:]
     else:
         field = "domain"
-    _commit(field, value, rs, allow, origin=value)
+    _commit(field, value, rs, allow, origin=origin)
 
 
 def _feed_logical(
@@ -164,9 +234,10 @@ def _feed_logical(
                 f"严格格式不允许逻辑规则里的 {field} 子项（来自 {origin!r}）；"
                 '若该源确实混有此类规则，请改用 "format": "text"'
             )
-        value = sub_rest.split(",")[0].strip()
-        if field != "domain_regex":
-            value = _strip_inline_comment(value)
+        if field == "domain_regex":
+            value = _regex_value(sub_rest)
+        else:
+            value = _strip_inline_comment(sub_rest.split(",")[0].strip())
         try:
             children.append({field: [normalize(field, value)]})
         except InvalidValue as exc:
@@ -194,9 +265,10 @@ def _feed_entry(raw: str, rs: RuleSet, allow: frozenset[str] | None) -> None:
             return
         field = TYPES.get(upper)
         if field:
-            value = rest.split(",", 1)[0].strip()
-            if field != "domain_regex":
-                value = _strip_inline_comment(value)
+            if field == "domain_regex":
+                value = _regex_value(rest)
+            else:
+                value = _strip_inline_comment(rest.split(",", 1)[0].strip())
             _commit(field, value, rs, allow, origin=raw)
             return
         if upper in SKIP:
