@@ -1,139 +1,189 @@
 # 配置说明
 
-配置文件默认位于项目根目录 `config.json`，可通过 `-c` 指定路径。
+配置文件默认位于项目根目录的 `config.json`，可通过 `-c` / `--config` 参数指定路径。
+
+## 配置示例
 
 ```json
 {
-  "schema": 1,
   "ruleset_version": 4,
-  "sing_box": { "version": "1.13.14", "platform": "linux-amd64" },
-  "output": { "json_dir": "output/json", "srs_dir": "output/srs" },
-  "fetch": { "concurrency": 8, "timeout": 30, "retries": 3 },
-  "rulesets": { }
-}
-```
-
-| 字段 | 必填 | 说明 |
-| --- | --- | --- |
-| `schema` | 是 | 配置文件格式版本，固定为 `1` |
-| `ruleset_version` | 是 | 目标 sing-box rule-set 版本 |
-| `sing_box.version` | 是 | 编译所用的 sing-box 版本（对应 GitHub Releases） |
-| `sing_box.platform` | 是 | 平台架构，如 `linux-amd64`、`windows-amd64`、`darwin-arm64` |
-| `sing_box.sha256` | 否 | 固定二进制的 SHA-256，详见下文 |
-| `output.*` | 否 | 输出目录，默认 `output/json` 与 `output/srs` |
-| `fetch.*` | 否 | 网络配置，默认并发 8、超时 30 秒、重试 3 次 |
-| `rulesets` | 是 | 规则集定义 |
-
-## sing_box.sha256
-
-可选。填入 sing-box 二进制的 SHA-256（64 位十六进制），之后每次下载完成、
-以及每次命中本地缓存时都会比对，不匹配就拒绝执行。
-
-SagerNet 的 release 不发布校验和文件，因此没有可自动比对的官方摘要 —— 这里是
-**自钉**：先正常跑一次拿到摘要，确认无误后写进配置，此后缓存被替换或下载被改写
-都会被挡下。不填则跳过校验，行为与从前一致。
-
-```bash
-# 取得当前使用的二进制摘要
-sha256sum .cache/sing-box/<版本>-<平台>/sing-box
-```
-
-```json
-"sing_box": {
-  "version": "1.14.0",
-  "platform": "linux-amd64",
-  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-}
-```
-
-## rulesets
-
-键名即输出文件名。同名下的多个源会自动合并去重。
-
-### 单个规则集
-
-简写（仅需指定 URL 或 URL 列表）：
-
-```json
-"block-ads": ["https://example.com/ads.json"],
-"skk-reject": [
-  "https://ruleset.skk.moe/sing-box/domainset/reject.json",
-  "https://ruleset.skk.moe/sing-box/non_ip/reject.json"
-]
-```
-
-完整对象配置：
-
-```json
-"cn-ip": {
-  "format": "cidr",
-  "aggregate": true,
-  "base": "https://example.com/ip-lists/",
-  "sources": ["chinanet46.txt", "cmcc46.txt"]
-}
-```
-
-| 键 | 说明 |
-| --- | --- |
-| `sources` | URL 或 URL 数组（若指定 `base` 则可写相对路径），必填 |
-| `base` | 公共 URL 前缀 |
-| `format` | 规则格式，默认 `singbox`，详见下文 |
-| `aggregate` | 是否合并相邻/包含的 CIDR（仅对 IP 生效），默认 `false` |
-
-### 规则集分组
-
-通过 `items` 将共享前缀或公共配置的规则集归组。组名自动作为输出文件名前缀：
-
-```json
-"skk": {
-  "base": "https://ruleset.skk.moe/sing-box/",
-  "items": {
-    "ai": "non_ip/ai.json",
-    "stream-jp": "non_ip/stream_jp.json",
-    "reject": ["domainset/reject.json", "non_ip/reject.json"]
+  "output": {
+    "srs":  { "dir": "output/srs",  "branch": "srs_release" },
+    "json": { "dir": "output/json", "branch": "json_release" }
+  },
+  "fetch": {
+    "concurrency": 16,
+    "timeout": "30s",
+    "retries": 3
+  },
+  "geosite": {
+    "repo": "v2fly/domain-list-community",
+    "normalize": "lenient"
+  },
+  "rulesets": {
+    "direct": {
+      "sources": [
+        "https://example.com/rules.json"
+      ],
+      "geosite": ["cn"]
+    }
   }
 }
 ```
 
-展开为 `skk-ai`、`skk-stream-jp`、`skk-reject`。如需自定义前缀或无需前缀，可指定 `"prefix": ""`。
+## 顶层字段
 
-## format
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `ruleset_version` | integer | 是 | - | 目标 rule-set 规则集版本（1 ~ sing-box 支持的最高版本） |
+| `output` | object | 是 | - | 输出产物配置，至少需要包含 `srs` 或 `json` 之一 |
+| `fetch` | object | 否 | - | HTTP 下载与并发控制参数 |
+| `geosite` | object | 否 | - | Geosite 数据源与预处理配置 |
+| `rulesets` | object | 是 | - | 规则集定义集合 |
 
-指定源文件的容器格式，默认 `singbox`。
+---
 
-| 取值 | 格式 | 适用场景 |
+## output
+
+定义不同格式产物的输出目录与发布分支。
+
+| 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `singbox` | JSON | sing-box rule-set（默认） |
-| `text` | 纯文本行 | Clash / Surge / Quantumult X 的 `.list` 规则或纯文本行 |
-| `yaml` | YAML | 含 `payload` / `rules` 列表的 YAML 配置 |
-| `cidr` | 纯文本行 | 严格模式：仅允许 IP/CIDR，混入其他内容即报错 |
-| `domainset` | 纯文本行 | 严格模式：仅允许域名，混入其他内容即报错 |
+| `srs` | object | 二进制 `.srs` 规则集配置 |
+| `json` | object | JSON 格式规则集配置 |
 
-- `text` 与 `yaml` 支持自动识别：带策略类型的规则（如 `DOMAIN-SUFFIX,example.com,PROXY`）、裸 IP/CIDR（如 `1.2.3.0/24`）以及裸域名（如 `+.example.com`）。
-- 不支持的规则类型（如 `GEOIP`、`IP-ASN`、`USER-AGENT` 等）会自动跳过并计入执行摘要。
+每个产物对象包含以下字段：
 
-## 命令行
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `dir` | string | 是 | - | 本地输出目录 |
+| `branch` | string | 否 | 无 | Git 发布分支。若省略则仅在本地生成，不执行发布 |
 
-```bash
-srsbox [-c CONFIG] [--only NAME] [-n] [--strict] [--sing-box PATH] [-v|-q]
+---
+
+## fetch
+
+HTTP 规则源下载配置：
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `concurrency` | integer | `16` | 最大并发下载数（需 >= 1） |
+| `timeout` | string / number | `"30s"` | 单个请求超时时间（支持 `"30s"`、`"1m"` 等格式，或秒数数字） |
+| `retries` | integer | `3` | 请求失败重试次数（需 >= 0） |
+
+---
+
+## geosite
+
+Geosite 数据源及相关配置：
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `repo` | string | `"v2fly/domain-list-community"` | 上游 GitHub 仓库，用于自动下载最新 `dlc.dat` |
+| `file` | string | 无 | 本地 `dlc.dat` 文件路径。若指定则使用本地文件，不请求网络 |
+| `normalize` | string | `"lenient"` | 域名归一化模式：`"lenient"`（忽略非法值）或 `"strict"`（非法值立即报错） |
+| `bulk` | object | 无 | 批量展开生成规则集配置 |
+
+### geosite.bulk
+
+根据 geosite code 批量生成规则集，生成的规则集名称为 `${prefix}${code}`：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `prefix` | string | 否 | 生成规则集名称的前缀（如 `"geosite-"`） |
+| `include` | string / string[] | 是 | 包含的 geosite code 模式（支持 glob，全量写 `["*"]`） |
+| `exclude` | string / string[] | 否 | 排除的 geosite code 模式（支持 glob，如 `["*@*"]` 排除属性变体） |
+
+---
+
+## rulesets
+
+规则集配置字典。键名即规则集名称（对应输出文件名，支持字母、数字、点、下划线、减号、`!`、`@`），值为规则集配置对象。
+
+### 输入源
+
+一个规则集支持同时配置以下多种输入源（均支持单个字符串或字符串数组）：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `sources` | string / string[] | HTTP/HTTPS 远程规则文件 URL |
+| `files` | string / string[] | 本地规则文件路径（相对工作目录） |
+| `geosite` | string / string[] | Geosite code 名称或 glob 模式（如 `"cn"`、`"google@ads"`、`"category-*-cn"`） |
+| `inline` | string / string[] | 内联规则文本（如 `"DOMAIN-SUFFIX,example.com"`） |
+
+> **简写形式**：若规则集的值直接为字符串或字符串数组，等价于仅配置 `sources`。例如：
+> ```json
+> "block-ads": "https://example.com/ads.json"
+> ```
+
+### 规则集选项
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `exclude` | object | 无 | 排除规则，支持与上述相同的输入源字段（`sources`、`files`、`geosite`、`inline`） |
+| `format` | string | 自动识别 | 规则格式（默认为空，自动判定） |
+| `aggregate` | boolean | `false` | 是否合并相邻或包含的 CIDR / IP 网段 |
+| `collapse` | boolean | `true` | 是否收敛等价规则（如冗余的子域名去重） |
+
+#### exclude 说明
+
+`exclude` 用于从当前规则集中排除特定规则。例如保留 `google` 但排除其广告域名：
+
+```json
+"google": {
+  "geosite": ["google"],
+  "exclude": {
+    "geosite": ["google@ads"]
+  }
+}
 ```
 
-| 参数 | 说明 |
+*若 `exclude` 中定义的所有源均获取失败，该规则集构建将判定为失败，以防排除失效导致规则泄露。*
+
+#### format 说明
+
+大部分常见格式无需显式指定，程序会自动根据内容识别（sing-box JSON、SRS 二进制、Clash / Surge / QX / 纯文本行列表等）。
+
+仅在以下场景需要显式指定：
+
+| 取值 | 说明 |
 | --- | --- |
-| `-c, --config` | 配置文件路径，默认 `config.json` |
-| `--only NAME` | 仅处理指定规则集（支持多次指定） |
-| `-n, --dry-run` | 仅生成 JSON，跳过 sing-box 下载与编译 |
-| `--strict` | 任一规则集失败即退出码非零 |
-| `--sing-box PATH` | 使用本地二进制路径，跳过自动下载（也可使用环境变量 `SING_BOX_BIN`） |
-| `--report-json PATH` | 写出机器可读的运行报告，供发布流程判断保留/清理 |
-| `-v` / `-vv` | 详细日志（`-vv` 显示 HTTP 抓取详情） |
-| `-q` | 静默模式，仅输出警告和错误 |
+| `adguard` | AdGuard 规则语法（支持 `||example.com^`、`@@` 例外规则等） |
+| `cidr` | 断言格式：严格限制内容仅允许 CIDR/IP，混入其他内容则报错 |
+| `domainset` | 断言格式：严格限制内容仅允许域名，混入其他内容则报错 |
 
-**退出码**：`0` 至少一个规则集成功；`1` 全部失败或 `--strict` 下存在失败；`2` 配置/参数错误；`130` 用户中断。
+---
 
-## 常见问题
+## 命令行工具
 
-- **报错期望 sing-box JSON**：源文件非 JSON 格式，按内容格式显式声明 `"format": "text"` 或 `"yaml"`。
-- **避免重复下载 sing-box**：二进制会缓存在 `.cache/sing-box/<版本>-<平台>/`。CI 中可缓存该目录，或通过 `--sing-box` / `SING_BOX_BIN` 指定预装路径。
-- **校验和不匹配**：缓存里的二进制与 `sing_box.sha256` 不符。若是你有意升级了版本，更新配置里的摘要；否则删除缓存目录重新下载。
-- **单个规则集失败**：默认各规则集互不影响，其余规则集正常生成与编译。
+### 构建 (build)
+
+```bash
+srs-box build [选项]
+```
+
+| 选项 | 简写 | 说明 |
+| --- | --- | --- |
+| `--config PATH` | `-c` | 配置文件路径（默认 `config.json`） |
+| `--only NAME` | | 仅构建指定的规则集（可多次指定） |
+| `--dry-run` | `-n` | 仅执行解析与处理，不写入磁盘 |
+| `--strict` | | 严格模式：任一规则集失败则整体以非零退出码退出 |
+| `--report PATH` | | 输出构建运行报告 JSON 路径 |
+| `--github-summary` | | 输出 GitHub Actions 步骤摘要与注解 |
+| `--quiet` | `-q` | 静默模式，仅输出摘要，不输出过程进度 |
+
+### 发布 (publish)
+
+```bash
+srs-box publish [选项]
+```
+
+| 选项 | 简写 | 说明 |
+| --- | --- | --- |
+| `--config PATH` | `-c` | 配置文件路径（默认 `config.json`） |
+| `--report PATH` | | 指定构建报告文件路径（默认 `run-report.json`） |
+| `--remote URL` | | Git 远端仓库地址（默认根据 `GITHUB_REPOSITORY` 推断） |
+| `--dry-run` | `-n` | 仅演练发布流程，不推送到远端分支 |
+| `--quiet` | `-q` | 静默模式，不输出详细进度 |
+
+> **发布认证**：`publish` 从环境变量 `GITHUB_TOKEN` 读取推送凭据。

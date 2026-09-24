@@ -50,11 +50,6 @@
         "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/domain.list"
       ]
     },
-    "apple-update": {
-      "sources": [
-        "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/update-domain.list"
-      ]
-    },
     "block-ads": {
       "sources": [
         "https://github.com/TG-Twilight/AWAvenue-Ads-Rule/raw/refs/heads/main/Filters/AWAvenue-Ads-Rule-Singbox.json"
