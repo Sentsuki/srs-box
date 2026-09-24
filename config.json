@@ -20,9 +20,15 @@
     "normalize": "lenient"
   },
   "rulesets": {
-    "apple-ai": {
+    "normal-ai": {
+      "sources": [
+        "https://github.com/viewer12/OverseasAI.list/raw/refs/heads/main/rule/Singbox/OverseasAI/OverseasAI.json"
+      ],
       "files": [
         "data/Apple_Intelligence.json"
+      ],
+      "geosite": [
+        "category-ai-!cn"
       ]
     },
     "apple-api": {
@@ -75,11 +81,6 @@
         "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cernet46.txt",
         "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cstnet46.txt",
         "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/drpeng46.txt"
-      ]
-    },
-    "normal-ai": {
-      "sources": [
-        "https://raw.githubusercontent.com/viewer12/OverseasAI.list/main/rule/Clash/OverseasAI/OverseasAI.list"
       ]
     },
     "riot": {
