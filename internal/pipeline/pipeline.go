@@ -95,6 +95,16 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) (*report.Run, er
 
 	results := build(ctx, cfg, selected, sources, opts)
 
+	// 中断必须一路传上去，不能退化成"一部分规则集失败"。
+	//
+	// build 把 ctx.Err() 记进各个规则集的 Err，于是只要有一个在信号到达前跑完，
+	// 整次运行看上去就是"部分成功"：退出码 0、运行报告照写、PruneStale 还会把
+	// 被中断那些规则集**上一次**的本地产物删掉。一次 Ctrl-C 与一次正常运行
+	// 无从分辨 —— 而在 CI 里这意味着一次超时被当成成功。
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	run := &report.Run{
 		Results:       results,
 		Configured:    configured,

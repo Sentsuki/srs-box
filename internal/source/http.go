@@ -11,13 +11,11 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/Sentsuki/srs-box/internal/buildinfo"
 	"github.com/Sentsuki/srs-box/internal/ruleset"
 	"github.com/Sentsuki/srs-box/internal/source/parse"
 	"golang.org/x/sync/errgroup"
 )
-
-// UserAgent 让上游知道是谁在抓。
-const UserAgent = "srs-box/0.3 (+https://github.com/Sentsuki/srs-box)"
 
 // MaxBytes 是单个源的体积上限，防止误配一个巨大地址把内存吃光。
 const MaxBytes = 64 << 20
@@ -184,7 +182,7 @@ func (h *HTTP) attempt(ctx context.Context, url string, slots chan struct{}) (bo
 	if err != nil {
 		return nil, err, false
 	}
-	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("User-Agent", buildinfo.UserAgent)
 
 	resp, err := h.client.Do(req)
 	if err != nil {

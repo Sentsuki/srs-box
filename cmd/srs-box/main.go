@@ -14,13 +14,12 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/Sentsuki/srs-box/internal/buildinfo"
 	"github.com/Sentsuki/srs-box/internal/config"
 	"github.com/Sentsuki/srs-box/internal/pipeline"
 	"github.com/Sentsuki/srs-box/internal/publish"
 	"github.com/Sentsuki/srs-box/internal/report"
 )
-
-const version = "0.3.0"
 
 func main() {
 	os.Exit(run(os.Args[1:]))
@@ -37,7 +36,7 @@ func run(args []string) int {
 	case "publish":
 		return publishCmd(args[1:])
 	case "version", "--version", "-V":
-		fmt.Println("srs-box", version)
+		fmt.Println("srs-box", buildinfo.Version)
 		return 0
 	case "help", "--help", "-h":
 		usage()
@@ -255,6 +254,13 @@ func publishCmd(args []string) int {
 		Progress: progress,
 	})
 	if err != nil {
+		// 与 build 一致：中断是 130，不是"发布失败"。发布是逐目标串行的，
+		// 被中断时前面的目标可能已经推上去了，说清楚是中断而不是出错，
+		// 才好判断要不要重跑。
+		if errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "已中断")
+			return 130
+		}
 		fmt.Fprintf(os.Stderr, "错误: %v\n", err)
 		return 1
 	}

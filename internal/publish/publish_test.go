@@ -3,6 +3,7 @@ package publish
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -381,5 +382,111 @@ func TestLoadReportRejectsWrongSchema(t *testing.T) {
 	}
 	if _, err := report.LoadJSON(path); err == nil {
 		t.Error("schema 不匹配应当报错")
+	}
+}
+
+// 发布分支永远只有一个提交 —— 产物分支是"当前快照"，它的历史没有使用者，
+// 而每天两次提交、几十个二进制文件会让远端只增不减。
+func TestBranchKeepsOnlyOneCommit(t *testing.T) {
+	remote := bareRemote(t)
+	seed(t, remote, "srs_release", "srs", "keep", "gone")
+	target := []Target{{Dir: "", Branch: "srs_release", Ext: "srs"}}
+
+	var prev string
+	for i, round := range []string{"第一次", "第二次", "第三次"} {
+		dir := filepath.Join(t.TempDir(), "out")
+		// keep 每轮都失败 → 一直保留最初 seed 进去的那份
+		rep := makeReport(t, dir, "srs", map[string]report.Status{
+			"keep": report.StatusFailed,
+			"a":    report.StatusOK,
+		}, true)
+		if err := os.WriteFile(filepath.Join(dir, "a.srs"),
+			[]byte(round+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		target[0].Dir = dir
+		if _, err := Run(context.Background(), rep, target, Options{Remote: remote}); err != nil {
+			t.Fatalf("%s 发布失败: %v", round, err)
+		}
+
+		if got := commitCount(t, remote, "srs_release"); got != 1 {
+			t.Errorf("%s 之后分支上有 %d 个提交，want 1", round, got)
+		}
+		if c := readRemote(t, remote, "srs_release", "a.srs"); !strings.Contains(c, round) {
+			t.Errorf("%s 的内容没推上去: %q", round, c)
+		}
+		// 断了父链也不能丢"保留上一次发布的文件"这一态 —— 它靠的是
+		// clone 下来的工作树，不是 git 历史。
+		if c := readRemote(t, remote, "srs_release", "keep.srs"); !strings.Contains(c, "旧内容") {
+			t.Errorf("%s 之后 keep.srs 没保住: %q", round, c)
+		}
+		if got := listRemote(t, remote, "srs_release"); !reflect.DeepEqual(got, []string{"a.srs", "keep.srs"}) {
+			t.Errorf("%s 之后远端文件 = %v", round, got)
+		}
+
+		head := strings.TrimSpace(run(t, "", "--no-pager", "-C", remote, "rev-parse", "srs_release"))
+		if i > 0 && head == prev {
+			t.Errorf("%s 没产生新提交", round)
+		}
+		prev = head
+	}
+}
+
+func commitCount(t *testing.T, remote, branch string) int {
+	t.Helper()
+	out := strings.TrimSpace(run(t, "", "--no-pager", "-C", remote, "rev-list", "--count", branch))
+	n := 0
+	if _, err := fmt.Sscanf(out, "%d", &n); err != nil {
+		t.Fatalf("解析提交数 %q: %v", out, err)
+	}
+	return n
+}
+
+// 强推必须带 lease：别人在 clone 之后推过东西，就该被拒绝而不是被盖掉。
+// 无父提交对已有分支必然是 non-fast-forward，原先靠"推不上去"拿到的那层保护
+// 在这里全靠 --force-with-lease。
+func TestForcePushWontClobberSomeoneElse(t *testing.T) {
+	remote := bareRemote(t)
+	seed(t, remote, "srs_release", "srs", "a")
+
+	work := t.TempDir()
+	g, err := newGit(work, Options{Remote: remote})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer g.cleanup()
+	ctx := context.Background()
+	if exists, err := g.cloneBranch(ctx, "srs_release"); err != nil || !exists {
+		t.Fatalf("clone 失败: %v", err)
+	}
+	if g.base == "" {
+		t.Fatal("没记住 clone 到的 tip，lease 就是空的")
+	}
+
+	// 另一个人在这中间推了一版
+	other := t.TempDir()
+	run(t, "", "clone", "--quiet", "--branch", "srs_release", remote, other)
+	if err := os.WriteFile(filepath.Join(other, "b.srs"), []byte("别人的\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run(t, other, "add", "-A")
+	run(t, other, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "--quiet", "-m", "别人的提交")
+	run(t, other, "push", "--quiet", "origin", "HEAD:srs_release")
+
+	if err := os.WriteFile(filepath.Join(work, "a.srs"), []byte("我的\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.add(ctx); err != nil {
+		t.Fatal(err)
+	}
+	commit, err := g.commitTree(ctx, "我的提交")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := g.push(ctx, commit, "srs_release"); err == nil {
+		t.Fatal("别人推过之后强推应当被拒绝")
+	}
+	if got := listRemote(t, remote, "srs_release"); !reflect.DeepEqual(got, []string{"a.srs", "b.srs"}) {
+		t.Errorf("别人的提交被盖掉了: %v", got)
 	}
 }

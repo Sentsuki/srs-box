@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/Sentsuki/srs-box/internal/buildinfo"
 )
 
 // DefaultRepo 是 dlc.dat 的上游。
@@ -17,8 +19,6 @@ const DefaultRepo = "v2fly/domain-list-community"
 
 // maxDLCBytes 是 dlc.dat 的体积上限。实测 2.3MB，留足余量但不让误配吃光内存。
 const maxDLCBytes = 64 << 20
-
-const userAgent = "srs-box/0.3 (+https://github.com/Sentsuki/srs-box)"
 
 // fetchDLC 下载并校验 dlc.dat。
 //
@@ -77,7 +77,7 @@ func get(ctx context.Context, client *http.Client, url string, limit int64) ([]b
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("User-Agent", buildinfo.UserAgent)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

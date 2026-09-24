@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -505,11 +506,12 @@ func makeDLC(t *testing.T, dir string) string {
 	} {
 		data = append(data, lenDelim(1, s)...)
 	}
-	path := filepath.Join(dir, "dlc.dat")
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "dlc.dat"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return path
+	// 返回相对路径：dir 就是 setup 切过去的工作目录，而 geosite.file 和
+	// rulesets.*.files 一样只收工作目录内的相对路径。
+	return "dlc.dat"
 }
 
 func TestGeositeInput(t *testing.T) {
@@ -580,13 +582,13 @@ func TestGeositeAttributeExclude(t *testing.T) {
 // dlc.dat 拿不到是**整类输入**不可用，不能让整次运行失败 ——
 // 引用 geosite 的规则集各自记账，其余照常产出。
 func TestGeositeFailureDoesNotSinkTheRun(t *testing.T) {
-	base, dir := setup(t)
+	base, _ := setup(t)
 	cfg := load(t, fmt.Sprintf(`{
   "ruleset_version": 4,
   "output": { "srs": { "dir": "out/srs" } },
   "geosite": { "file": %q },
   "rulesets": { "http-only": ["%s/good"], "geo": { "geosite": ["cn"] } }
-}`, filepath.ToSlash(filepath.Join(dir, "missing.dat")), base))
+}`, "missing.dat", base))
 
 	run := runAll(t, cfg, Options{})
 	got := byName(run)
@@ -628,13 +630,13 @@ func TestGeositeBulkExpansion(t *testing.T) {
 // bulk 展开不了时**名单不完整** —— 发布方必须据此跳过孤儿清理，
 // 否则一次 GitHub 抖动会删光整个前缀。这条在旧的 shell 发布脚本里表达不出来。
 func TestGeositeBulkFailureMarksListIncomplete(t *testing.T) {
-	base, dir := setup(t)
+	base, _ := setup(t)
 	cfg := load(t, fmt.Sprintf(`{
   "ruleset_version": 4,
   "output": { "srs": { "dir": "out/srs" } },
   "geosite": { "file": %q, "bulk": { "include": ["*"] } },
   "rulesets": { "http-only": ["%s/good"] }
-}`, filepath.ToSlash(filepath.Join(dir, "missing.dat")), base))
+}`, "missing.dat", base))
 
 	run := runAll(t, cfg, Options{})
 	if run.Authoritative {
@@ -865,7 +867,7 @@ func TestBulkExpandsWithoutAnyGeositeRuleset(t *testing.T) {
 // geosite.file 指向一个不存在的文件：真去加载一定会报错并打进度，
 // 所以"进度里没有 geosite 字样"就等于"没去加载"。
 func TestOnlySkipsGeositeLoadWhenNotNeeded(t *testing.T) {
-	base, dir := setup(t)
+	base, _ := setup(t)
 	cfg := load(t, fmt.Sprintf(`{
   "ruleset_version": 4,
   "output": { "srs": { "dir": "out/srs" } },
@@ -874,7 +876,7 @@ func TestOnlySkipsGeositeLoadWhenNotNeeded(t *testing.T) {
     "http-only": ["%s/good"],
     "geo": { "geosite": ["netflix"] }
   }
-}`, filepath.ToSlash(filepath.Join(dir, "missing.dat")), base))
+}`, "missing.dat", base))
 
 	var lines []string
 	run, err := Run(context.Background(), cfg, Options{
@@ -928,5 +930,35 @@ func TestUnmergeableArtifactIsReported(t *testing.T) {
 	// 单条的那个不该被加注，否则 33 行全是噪声
 	if strings.Contains(out, "1 个对象") {
 		t.Errorf("单条对象不该出现在摘要里:\n%s", out)
+	}
+}
+
+// 中断必须让整次运行失败，而不是变成"部分规则集失败"。
+//
+// 没有这条检查时，Ctrl-C（或 CI 超时）之后：退出码是 0、运行报告照写、
+// PruneStale 还会把被中断那些规则集上一次的本地产物删掉 —— 与一次正常运行
+// 无从分辨。
+func TestCancelledRunIsAnError(t *testing.T) {
+	setup(t)
+	// 全用 inline：抓取阶段无事可做，于是这条用例只可能在 build 之后的
+	// 那道检查上通过或失败。
+	cfg := load(t, `{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "rulesets": { "a": { "inline": ["DOMAIN,a.example"] }, "b": { "inline": ["DOMAIN,b.example"] } }
+}`)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	run, err := Run(ctx, cfg, Options{DryRun: true})
+	if err == nil {
+		t.Fatalf("中断之后 Run 应当报错，实际拿到 %d 个结果", len(run.Results))
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("错误里应当能认出 context.Canceled，实际: %v", err)
+	}
+	if run != nil {
+		t.Error("中断时不该返回半截的运行结果")
 	}
 }
