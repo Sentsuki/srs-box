@@ -27,6 +27,13 @@ func setup(t *testing.T) (base string, dir string) {
 			fmt.Fprint(w, "1.2.0.0/24\n1.2.1.0/24\n")
 		case "/allow":
 			fmt.Fprint(w, "DOMAIN-SUFFIX,other.example\n")
+		case "/clashish":
+			// Clash 的写法：+. 落成无点 domain_suffix
+			fmt.Fprint(w, "+.drop.example\n+.keep.example\n")
+		case "/geositeish":
+			// geosite RootDomain 的写法：domain + 带点 suffix 两条
+			fmt.Fprint(w, `{"version":4,"rules":[{"domain":["drop.example"],`+
+				`"domain_suffix":[".drop.example"]}]}`)
 		case "/html":
 			fmt.Fprint(w, "<html><body>404</body></html>\n")
 		case "/watermark":
@@ -171,6 +178,43 @@ func TestExcludeSubtracts(t *testing.T) {
 	}
 	if res.Diag.Subtracted == 0 {
 		t.Error("差集没生效")
+	}
+}
+
+// exclude 与主集合来自不同的源、因而是不同编码时，差集照样要生效。
+//
+// 这是最容易静默失效的一条路径：两边说的是同一件事，字符串却对不上，
+// 本该排掉的域名原样留在产物里 —— 与"exclude 的源全挂"相同的后果，
+// 而那种情况我们是直接判整个规则集失败的。
+func TestExcludeAcrossEncodings(t *testing.T) {
+	base, _ := setup(t)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "json": { "dir": "out/json" } },
+  "rulesets": {
+    "mixed": {
+      "sources": ["%s/clashish"],
+      "exclude": { "sources": ["%s/geositeish"] }
+    }
+  }
+}`, base, base))
+
+	res := byName(runAll(t, cfg, Options{}))["mixed"]
+	if !res.OK {
+		t.Fatalf("应当成功: %v", res.Err)
+	}
+	if res.Diag.Subtracted != 1 {
+		t.Errorf("差集 = %d, want 1（两边编码不同，但说的是同一件事）", res.Diag.Subtracted)
+	}
+	body, err := os.ReadFile(filepath.Join("out", "json", "mixed.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "drop.example") {
+		t.Errorf("被排除的域名漏进了产物:\n%s", body)
+	}
+	if !strings.Contains(string(body), "keep.example") {
+		t.Errorf("不该排除的域名丢了:\n%s", body)
 	}
 }
 

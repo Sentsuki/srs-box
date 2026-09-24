@@ -24,8 +24,18 @@ type Diagnostics struct {
 	// 波动（贡献 domain_keyword 的源挂掉，被它压住的域名就全回来了），
 	// 不单独记账的话"今天怎么多了三万条"会很难查。
 	Collapsed int
-	// Subtracted 被 exclude 差集删掉的条数。
+	// Subtracted 被 exclude 差集整条删掉的条数。
 	Subtracted int
+	// Narrowed 被 exclude 改窄、但仍留在产物里的条数：无点 suffix 去掉 apex
+	// 变成带点 suffix，或者一段 CIDR 被裁掉一块。
+	Narrowed int
+	// Unexpressible exclude 与产物部分重叠、而 headless rule 写不出差集的条数
+	// （suffix:a.com 减 domain:x.a.com）。
+	//
+	// 单列出来是必要的：这是排除唯一会**不生效**的情形，不报出来的话它和
+	// "本来就没有要排的东西"在摘要上长得一模一样 —— 而这个项目在别处已经把
+	// 排除失效当成要让整个规则集失败的事故（见 pipeline 里 exclude 全挂那段）。
+	Unexpressible int
 	// Aggregated CIDR 聚合减少的条数。
 	Aggregated int
 }
@@ -72,6 +82,8 @@ func (d *Diagnostics) Merge(other *Diagnostics) {
 	d.Dropped += other.Dropped
 	d.Collapsed += other.Collapsed
 	d.Subtracted += other.Subtracted
+	d.Narrowed += other.Narrowed
+	d.Unexpressible += other.Unexpressible
 	d.Aggregated += other.Aggregated
 	if room := MaxInvalidSamples - len(d.InvalidSamples); room > 0 {
 		d.InvalidSamples = append(d.InvalidSamples, other.InvalidSamples[:min(room, len(other.InvalidSamples))]...)
