@@ -2,6 +2,7 @@ package source
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -55,6 +56,20 @@ func TestSmokeRealSources(t *testing.T) {
 		}
 		t.Logf("%-14s %6d → %-6d (聚合 -%d 收敛 -%d) 源失败 %d  跳过=%v 非法=%d  %v",
 			spec.Name, before, set.Total(), agg, col, failed,
-			set.Diag.Skipped, set.Diag.InvalidTotal(), set.Counts())
+			set.Diag.Skipped, set.Diag.InvalidTotal(), fieldCounts(set))
 	}
+}
+
+// fieldCounts 按输出顺序列出各字段条数，只给这条日志用。
+func fieldCounts(set *ruleset.RuleSet) []string {
+	var out []string
+	for _, f := range ruleset.AllFields() {
+		if n := len(set.Values(f)) + len(set.Ports(f)); n > 0 {
+			out = append(out, fmt.Sprintf("%s=%d", f, n))
+		}
+	}
+	if n := set.RuleObjects(); n != 1 {
+		out = append(out, fmt.Sprintf("对象=%d", n))
+	}
+	return out
 }

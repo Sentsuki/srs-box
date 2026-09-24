@@ -38,8 +38,11 @@ type Result struct {
 	OK   bool
 	// Rules 是变换之后的规则条数。
 	Rules int
-	Err   error
-	Diag  ruleset.Diagnostics
+	// Objects 是产物里的 rule 对象数。不是 1 就意味着规则集不可合并 ——
+	// 引用方把它和 domain_suffix 写在同一条规则里时，规则集那一半会失效。
+	Objects int
+	Err     error
+	Diag    ruleset.Diagnostics
 
 	JSONPath string
 	SRSPath  string
@@ -281,6 +284,11 @@ func (res *Result) notes() []string {
 	}
 	if d.Dropped > 0 {
 		notes = append(notes, fmt.Sprintf("按过滤规则丢弃 %d", d.Dropped))
+	}
+	// 产物形状：1 条 rule 对象才是可合并的，不是 1 就报出来。成因（透传规则、
+	// 或者用到 rule 内 AND 项的字段）都不算错，但后果看不见，所以得看得见。
+	if res.Objects > 1 {
+		notes = append(notes, fmt.Sprintf("%d 个对象", res.Objects))
 	}
 	if n := len(res.FailedSources); n > 0 {
 		notes = append(notes, fmt.Sprintf("%d 个源不可用", n))

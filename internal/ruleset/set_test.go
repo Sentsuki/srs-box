@@ -213,7 +213,7 @@ func TestSubtract(t *testing.T) {
 	}
 }
 
-func TestCountsAndTotal(t *testing.T) {
+func TestTotalAndEmpty(t *testing.T) {
 	s := New("t")
 	s.AddLenient(FieldDomain, "a.com")
 	s.AddLenient(FieldDomainSuffix, ".b.com")
@@ -225,13 +225,66 @@ func TestCountsAndTotal(t *testing.T) {
 	if s.Empty() {
 		t.Error("Empty() 应为 false")
 	}
-	counts := s.Counts()
-	// 顺序必须跟字段声明顺序一致，verbatim 垫在最后
-	want := []string{"domain", "domain_suffix", "port", "verbatim"}
-	for i, w := range want {
-		if i >= len(counts) || counts[i].Name != w {
-			t.Fatalf("Counts() = %+v, want 顺序 %v", counts, want)
-		}
+	if got := New("empty"); !got.Empty() {
+		t.Error("空集合 Empty() 应为 true")
+	}
+}
+
+// RuleObjects 是数出来的，Options 是拼出来的 —— 两者必须始终一致，
+// 否则摘要报的可合并性就是假的。
+func TestRuleObjectsMatchesOptions(t *testing.T) {
+	cases := []struct {
+		name  string
+		build func(*RuleSet)
+		want  int
+	}{
+		{"空集合", func(*RuleSet) {}, 0},
+		{"只有域名", func(s *RuleSet) {
+			s.AddLenient(FieldDomain, "a.com")
+			s.AddLenient(FieldDomainSuffix, ".b.com")
+			s.AddLenient(FieldDomainKeyword, "ads")
+			s.AddLenient(FieldDomainRegex, `^x\.com$`)
+		}, 1},
+		{"域名加 ip_cidr", func(s *RuleSet) {
+			s.AddLenient(FieldDomain, "a.com")
+			s.AddLenient(FieldIPCIDR, "1.2.3.0/24")
+		}, 1},
+		{"只有 ip_cidr", func(s *RuleSet) {
+			s.AddLenient(FieldIPCIDR, "1.2.3.0/24")
+		}, 1},
+		{"域名加端口", func(s *RuleSet) {
+			s.AddLenient(FieldDomain, "a.com")
+			s.AddPort(FieldPort, 443)
+		}, 2},
+		{"域名加 network 加进程名", func(s *RuleSet) {
+			s.AddLenient(FieldDomain, "a.com")
+			s.AddLenient(FieldNetwork, "tcp")
+			s.AddLenient(FieldProcessName, "Telegram")
+		}, 3},
+		{"只有源地址", func(s *RuleSet) {
+			s.AddLenient(FieldSourceIPCIDR, "10.0.0.0/8")
+			s.AddPort(FieldSourcePort, 1080)
+		}, 2},
+		{"域名加透传", func(s *RuleSet) {
+			s.AddLenient(FieldDomain, "a.com")
+			s.AddVerbatim(logicalRule())
+		}, 2},
+		{"只有透传", func(s *RuleSet) {
+			s.AddVerbatim(logicalRule())
+		}, 1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := New("t")
+			c.build(s)
+			got := s.RuleObjects()
+			if want := len(s.Options().Rules); got != want {
+				t.Errorf("RuleObjects() = %d，Options() 实际产出 %d 条", got, want)
+			}
+			if got != c.want {
+				t.Errorf("RuleObjects() = %d, want %d", got, c.want)
+			}
+		})
 	}
 }
 

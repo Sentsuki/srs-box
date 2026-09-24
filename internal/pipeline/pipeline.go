@@ -448,6 +448,7 @@ func buildOne(ctx context.Context, cfg *config.Config, spec *config.Ruleset, sou
 
 	res.Diag = set.Diag
 	res.Rules = set.Total()
+	res.Objects = set.RuleObjects()
 	if set.Empty() {
 		res.Err = errors.New("解析后没有任何规则")
 		return res

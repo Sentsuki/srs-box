@@ -171,6 +171,33 @@ Geosite 数据源及相关配置：
 `10.0.0.0/8` 排除 `10.1.0.0/16` 会被精确裁分。此处不会顺带合并其余网段 ——
 合并只由 `aggregate` 控制。
 
+### 产物形状与可合并性
+
+sing-box 在引用方规则同时写了域名条件与 `rule_set` 时，例如
+
+```json
+{ "domain_suffix": ["example.org"], "rule_set": ["geosite-google"] }
+```
+
+会把规则集并进引用方的匹配组，使两者成为 **OR**（任一命中即命中）。但这项合并
+**仅在规则集恰好只有一条 rule 时生效**。规则集有两条或更多时，上述写法退化为
+「`domain_suffix` 命中 **且** 规则集命中」，规则集那一半实际失效 —— 而产物本身
+合法、条数正常，看不出异常。
+
+因此 srs-box 把目标地址组的字段（`domain`、`domain_suffix`、`domain_keyword`、
+`domain_regex`、`ip_cidr`）全部产出在同一条 rule 里，这些字段组内为 OR，合并前后
+匹配结果相同。
+
+以下两种情况会使产物超过一条 rule，规则集将不可合并：
+
+| 成因 | 说明 |
+| --- | --- |
+| 透传规则 | 逻辑规则（`AND,(...)`）、带 `invert` 的规则、含未知字段的规则，以及 `format: "adguard"` 的全部产物 |
+| rule 内 AND 项字段 | `network`、`port`、`source_port`、`process_name`、`process_path`、`package_name`、`source_ip_cidr` —— 合进同一条会变成「必须同时命中」，属于改语义，故各自成条 |
+
+两者都不算配置错误，但构建摘要会标出 `N 个对象` 以便察觉。只写 `rule_set`、
+不在同一条规则里混写域名条件时，不受此限制。
+
 #### format 说明
 
 大部分常见格式无需显式指定，程序会自动根据内容识别（sing-box JSON、SRS 二进制、Clash / Surge / QX / 纯文本行列表等）。

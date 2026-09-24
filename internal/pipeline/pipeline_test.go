@@ -893,3 +893,40 @@ func TestOnlySkipsGeositeLoadWhenNotNeeded(t *testing.T) {
 		}
 	}
 }
+
+// 产物不是单条 rule 对象时，摘要必须标出来。
+//
+// 这是"规则集可合并"这条不变量唯一的运行时信号：一条透传规则就能让产物变成
+// 两条 rule，引用方 {"domain_suffix": [...], "rule_set": [...]} 的写法随之失效，
+// 而产物本身合法、条数正常。
+func TestUnmergeableArtifactIsReported(t *testing.T) {
+	_, _ = setup(t)
+	cfg := load(t, `{
+  "ruleset_version": 4,
+  "output": { "json": { "dir": "out/json" } },
+  "rulesets": {
+    "plain":    { "inline": ["DOMAIN-SUFFIX,a.example", "DOMAIN,b.example"] },
+    "logical":  { "inline": ["DOMAIN-SUFFIX,a.example", "AND,((DOMAIN,c.example),(DOMAIN-SUFFIX,d.example))"] }
+  }
+}`)
+
+	run := runAll(t, cfg, Options{})
+	got := byName(run)
+	if n := got["plain"].Objects; n != 1 {
+		t.Errorf("纯域名规则集应当是单条对象，实际 %d", n)
+	}
+	if n := got["logical"].Objects; n != 2 {
+		t.Errorf("带透传规则的规则集应当是 2 条对象，实际 %d", n)
+	}
+
+	var buf strings.Builder
+	run.Summarize(&buf)
+	out := buf.String()
+	if !strings.Contains(out, "2 个对象") {
+		t.Errorf("摘要没标出不可合并的产物:\n%s", out)
+	}
+	// 单条的那个不该被加注，否则 33 行全是噪声
+	if strings.Contains(out, "1 个对象") {
+		t.Errorf("单条对象不该出现在摘要里:\n%s", out)
+	}
+}

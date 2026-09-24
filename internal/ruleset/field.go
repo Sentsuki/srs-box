@@ -115,10 +115,23 @@ func AllFields() []Field {
 // 的匹配结果相同 —— 但只有挤在一条里，规则集才是**可合并**的，引用方写
 // {"domain_suffix": [...], "rule_set": [...]} 时才会得到 OR。见 Options 的注释。
 //
-// ip_cidr 也在这一组。DNS 预匹配阶段它会被忽略（那时还没有 IP），这是上游
-// 有意为之 —— 很多规则集根本没把 IP 和域名分清，按 IP 提前判定会造成大量错配，
-// 所以宁可在预匹配阶段不看 IP。既然如此，就没有理由为了保住那条延后通路而
-// 把 ip_cidr 单独留一条、赔掉整个规则集的可合并性。
+// ip_cidr 也在这一组：它进的是 destinationIPCIDRItems 而不是
+// destinationAddressItems，但 evaluateGroups 给两者记的是**同一个** required 位，
+// 且 ip_cidr 那半带 `if !satisfied.has(...)` 兜底 —— 所以组内仍然是 OR。
+//
+// 合并它的代价只有一处，值得写清楚免得下次有人以为白捡：sing-box 在 DNS 预匹配
+// 阶段（LegacyPreMatch 会置 IgnoreDestinationIPCIDRMatch）拿不到 IP，于是把这条
+// rule 记进 DeferredIPCIDRMatchGroups 等解析完再判 —— 是**延后**，不是忽略。而
+// 那段延后只在 len(destinationAddressItems) == 0 时触发（rule_abstract.go），
+// 所以域名和 ip_cidr 挤进同一条之后，这次延后就永久没有了。
+//
+// 仍然划算，因为丢的比看上去少：规则集元数据 ContainsIPCIDRRule 与
+// ContainsNonIPCIDRRule 是扫 option 结构算的，合不合并都一样，于是引用方的
+// WithAddressLimit() 照旧为真，DNS 仍会走"解析完再匹配"那条路。真正没了的只是
+// legacy 预匹配里的那一次延后。拿它换整个规则集的可合并性，换得过。
+//
+// 纯 IP 的规则集不受影响：它们没有域名字段，destinationAddressItems 为空，
+// 延后通路完好。
 func (f Field) InDestinationGroup() bool {
 	switch f {
 	case FieldDomain, FieldDomainSuffix, FieldDomainKeyword, FieldDomainRegex, FieldIPCIDR:

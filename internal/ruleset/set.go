@@ -159,31 +159,33 @@ func (s *RuleSet) Total() int {
 // Empty 报告规则集是否一条规则都没有。
 func (s *RuleSet) Empty() bool { return s.Total() == 0 }
 
-// Counts 按输出顺序返回各字段条数，供摘要使用。
-func (s *RuleSet) Counts() []struct {
-	Name  string
-	Count int
-} {
-	var out []struct {
-		Name  string
-		Count int
-	}
+// RuleObjects 是产物里会出现几条 rule 对象。
+//
+// 这个数必须是 1，规则集才是可合并的（见 Options）。不是 1 的原因只有两种：
+// 有透传规则，或者用到了 rule 内 AND 项的字段 —— 两种都不是"做错了"，
+// 但后果是引用方写 {"domain_suffix": [...], "rule_set": [...]} 时那一半失效，
+// 而产物本身看不出来。所以它出现在摘要里。
+//
+// 不走 Options()：那会把几万个值排一遍序，只为数个数。两者的一致性由
+// TestRuleObjectsMatchesOptions 守着。
+func (s *RuleSet) RuleObjects() int {
+	n := len(s.verbatim)
+	dest := false
 	for f := range fieldCount {
-		n := len(s.strs[f]) + len(s.ports[f])
-		if n > 0 {
-			out = append(out, struct {
-				Name  string
-				Count int
-			}{f.String(), n})
+		if f.InDestinationGroup() {
+			if len(s.strs[f]) > 0 {
+				dest = true
+			}
+			continue
+		}
+		if len(s.strs[f]) > 0 || len(s.ports[f]) > 0 {
+			n++
 		}
 	}
-	if len(s.verbatim) > 0 {
-		out = append(out, struct {
-			Name  string
-			Count int
-		}{"verbatim", len(s.verbatim)})
+	if dest {
+		n++
 	}
-	return out
+	return n
 }
 
 // Options 是唯一的序列化出口。
