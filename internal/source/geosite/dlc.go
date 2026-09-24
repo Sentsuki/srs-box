@@ -50,21 +50,27 @@ func decodeDLC(data []byte) ([]rawSite, error) {
 	for !r.done() {
 		field, wire, err := r.tag()
 		if err != nil {
-			return nil, fmt.Errorf("GeoSiteList: %w", err)
+			return nil, fmt.Errorf("读 GeoSiteList 失败: %w", err)
 		}
 		if field != 1 || wire != wireBytes {
 			if err := r.skip(wire); err != nil {
-				return nil, fmt.Errorf("GeoSiteList: %w", err)
+				return nil, fmt.Errorf("读 GeoSiteList 失败: %w", err)
 			}
 			continue
 		}
 		chunk, err := r.bytes()
 		if err != nil {
-			return nil, fmt.Errorf("GeoSiteList.entry: %w", err)
+			return nil, fmt.Errorf("读 GeoSiteList.entry 失败: %w", err)
 		}
 		site, err := decodeSite(chunk)
 		if err != nil {
-			return nil, err
+			// 带上下标和 code 名：dlc.dat 是两百多万字节的二进制，
+			// 一句"某个字段读不出来"对排错没有用，得说清是哪一条。
+			where := fmt.Sprintf("GeoSiteList.entry[%d]", len(sites))
+			if site.Code != "" {
+				where += " (" + site.Code + ")"
+			}
+			return nil, fmt.Errorf("读 %s 失败: %w", where, err)
 		}
 		sites = append(sites, site)
 	}
@@ -80,28 +86,28 @@ func decodeSite(data []byte) (rawSite, error) {
 	for !r.done() {
 		field, wire, err := r.tag()
 		if err != nil {
-			return site, fmt.Errorf("GeoSite: %w", err)
+			return site, fmt.Errorf("读 GeoSite 失败: %w", err)
 		}
 		switch {
 		case field == 1 && wire == wireBytes: // country_code
 			raw, err := r.bytes()
 			if err != nil {
-				return site, fmt.Errorf("GeoSite.country_code: %w", err)
+				return site, fmt.Errorf("读 GeoSite.country_code 失败: %w", err)
 			}
 			site.Code = string(raw)
 		case field == 2 && wire == wireBytes: // domain
 			chunk, err := r.bytes()
 			if err != nil {
-				return site, fmt.Errorf("GeoSite.domain: %w", err)
+				return site, fmt.Errorf("读 GeoSite.domain 失败: %w", err)
 			}
 			domain, err := decodeDomain(chunk)
 			if err != nil {
-				return site, err
+				return site, fmt.Errorf("读 GeoSite.domain[%d] 失败: %w", len(site.Domains), err)
 			}
 			site.Domains = append(site.Domains, domain)
 		default:
 			if err := r.skip(wire); err != nil {
-				return site, fmt.Errorf("GeoSite: %w", err)
+				return site, fmt.Errorf("读 GeoSite 失败: %w", err)
 			}
 		}
 	}
@@ -114,36 +120,36 @@ func decodeDomain(data []byte) (rawDomain, error) {
 	for !r.done() {
 		field, wire, err := r.tag()
 		if err != nil {
-			return d, fmt.Errorf("Domain: %w", err)
+			return d, fmt.Errorf("读 Domain 失败: %w", err)
 		}
 		switch {
 		case field == 1 && wire == wireVarint: // type
 			v, err := r.varint()
 			if err != nil {
-				return d, fmt.Errorf("Domain.type: %w", err)
+				return d, fmt.Errorf("读 Domain.type 失败: %w", err)
 			}
 			d.Type = domainType(v)
 		case field == 2 && wire == wireBytes: // value
 			raw, err := r.bytes()
 			if err != nil {
-				return d, fmt.Errorf("Domain.value: %w", err)
+				return d, fmt.Errorf("读 Domain.value 失败: %w", err)
 			}
 			d.Value = string(raw)
 		case field == 3 && wire == wireBytes: // attribute
 			chunk, err := r.bytes()
 			if err != nil {
-				return d, fmt.Errorf("Domain.attribute: %w", err)
+				return d, fmt.Errorf("读 Domain.attribute 失败: %w", err)
 			}
 			key, err := decodeAttributeKey(chunk)
 			if err != nil {
-				return d, err
+				return d, fmt.Errorf("读 Domain.attribute[%d] 失败: %w", len(d.Attributes), err)
 			}
 			if key != "" {
 				d.Attributes = append(d.Attributes, key)
 			}
 		default:
 			if err := r.skip(wire); err != nil {
-				return d, fmt.Errorf("Domain: %w", err)
+				return d, fmt.Errorf("读 Domain 失败: %w", err)
 			}
 		}
 	}
@@ -160,18 +166,18 @@ func decodeAttributeKey(data []byte) (string, error) {
 	for !r.done() {
 		field, wire, err := r.tag()
 		if err != nil {
-			return "", fmt.Errorf("Attribute: %w", err)
+			return "", fmt.Errorf("读 Attribute 失败: %w", err)
 		}
 		if field == 1 && wire == wireBytes {
 			raw, err := r.bytes()
 			if err != nil {
-				return "", fmt.Errorf("Attribute.key: %w", err)
+				return "", fmt.Errorf("读 Attribute.key 失败: %w", err)
 			}
 			key = string(raw)
 			continue
 		}
 		if err := r.skip(wire); err != nil {
-			return "", fmt.Errorf("Attribute: %w", err)
+			return "", fmt.Errorf("读 Attribute 失败: %w", err)
 		}
 	}
 	return key, nil

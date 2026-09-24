@@ -580,3 +580,27 @@ func TestNormalizeDefaultsToLenient(t *testing.T) {
 		t.Errorf("默认应当是 lenient: %v", err)
 	}
 }
+
+// 解码失败时错误信息必须指出**出错位置**。dlc.dat 是从网上下载的二进制，
+// 一句"解析失败"对排错毫无帮助 —— 嵌套包装出来的路径才是有用的东西。
+func TestDecodeErrorNamesTheLocation(t *testing.T) {
+	// 造一条 Domain.value 的长度前缀被截断的记录
+	body := lenDelim(1, []byte("EXAMPLE"))
+	bad := tag(2, wireBytes)
+	bad = append(bad, varint(99)...) // 声称 99 字节，实际没有
+	bad = append(bad, []byte("短")...)
+	body = append(body, lenDelim(2, bad)...)
+
+	_, err := decodeDLC(listMsg(body))
+	if err == nil {
+		t.Fatal("截断的记录应当报错")
+	}
+	msg := err.Error()
+	// 逐层包装应当拼出一条路径
+	for _, want := range []string{"GeoSiteList.entry", "GeoSite.domain", "Domain.value"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("错误信息里缺路径片段 %q:\n  %s", want, msg)
+		}
+	}
+	t.Logf("错误信息: %s", msg)
+}
