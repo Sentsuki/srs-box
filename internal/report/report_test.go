@@ -151,7 +151,7 @@ func TestSummarizeIsDeterministic(t *testing.T) {
 		return buf.String()
 	}
 	first := render()
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		if got := render(); got != first {
 			t.Fatalf("摘要不稳定:\n%s\n---\n%s", first, got)
 		}

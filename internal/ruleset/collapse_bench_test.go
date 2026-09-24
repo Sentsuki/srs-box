@@ -11,9 +11,13 @@ import (
 func BenchmarkCollapseLarge(b *testing.B) {
 	for _, size := range []int{10_000, 50_000} {
 		b.Run(fmt.Sprintf("values=%d", size), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
+			// 每轮都要一份新数据（收敛是幂等的，跑第二遍什么都不删），
+			// 而构造数据不该计进耗时 —— b.Loop 自带这个语义，
+			// 不必再手工 StopTimer/StartTimer。
+			var s *RuleSet
+			for b.Loop() {
 				b.StopTimer()
-				s := largeSet(size, 500)
+				s = largeSet(size, 500)
 				b.StartTimer()
 				s.Collapse()
 			}
@@ -23,9 +27,10 @@ func BenchmarkCollapseLarge(b *testing.B) {
 
 // 只有后缀、没有关键词的场景 —— 用来看祖先查表那一步本身的开销。
 func BenchmarkCollapseSuffixesOnly(b *testing.B) {
-	for i := 0; i < b.N; i++ {
+	var s *RuleSet
+	for b.Loop() {
 		b.StopTimer()
-		s := largeSet(50_000, 0)
+		s = largeSet(50_000, 0)
 		b.StartTimer()
 		s.Collapse()
 	}
@@ -33,7 +38,7 @@ func BenchmarkCollapseSuffixesOnly(b *testing.B) {
 
 func largeSet(values, keywords int) *RuleSet {
 	s := New("bench")
-	for i := 0; i < values; i++ {
+	for i := range values {
 		// 制造真实的层级关系：每 20 个共享一个二级域，于是会有大量可收敛项。
 		parent := fmt.Sprintf("p%d.example", i/20)
 		switch i % 4 {
@@ -47,7 +52,7 @@ func largeSet(values, keywords int) *RuleSet {
 			s.AddLenient(FieldDomain, fmt.Sprintf("t%d.tracker%d.io", i, i%37))
 		}
 	}
-	for i := 0; i < keywords; i++ {
+	for i := range keywords {
 		s.AddLenient(FieldDomainKeyword, fmt.Sprintf("tracker%d", i))
 	}
 	return s

@@ -203,7 +203,7 @@ func (r *Run) Summarize(w io.Writer) {
 		}
 		fmt.Fprintln(w, line)
 		if res.Err != nil {
-			for _, chunk := range strings.Split(res.Err.Error(), "\n") {
+			for chunk := range strings.SplitSeq(res.Err.Error(), "\n") {
 				fmt.Fprintf(w, "      %s\n", chunk)
 			}
 		}

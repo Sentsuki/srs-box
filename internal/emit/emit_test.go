@@ -116,7 +116,7 @@ func TestOutputIsByteIdentical(t *testing.T) {
 	}
 	for _, kind := range []string{"json", "srs"} {
 		first := render(kind)
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			if !bytes.Equal(first, render(kind)) {
 				t.Fatalf("%s 产出不稳定", kind)
 			}

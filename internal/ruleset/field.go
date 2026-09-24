@@ -75,7 +75,7 @@ var fields = [fieldCount]struct {
 
 var byName = func() map[string]Field {
 	m := make(map[string]Field, fieldCount)
-	for f := Field(0); f < fieldCount; f++ {
+	for f := range fieldCount {
 		m[fields[f].name] = f
 	}
 	return m
@@ -103,7 +103,7 @@ func Lookup(name string) (Field, bool) {
 // AllFields 按输出顺序返回全部字段。
 func AllFields() []Field {
 	out := make([]Field, 0, fieldCount)
-	for f := Field(0); f < fieldCount; f++ {
+	for f := range fieldCount {
 		out = append(out, f)
 	}
 	return out

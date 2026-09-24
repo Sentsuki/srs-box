@@ -425,21 +425,23 @@ func makeDLC(t *testing.T, dir string) string {
 		}
 		return append(out, byte(v))
 	}
+	// protobuf wire type：0 = varint，2 = 长度前缀。
+	const wireVarint, wireBytes = 0, 2
 	lenDelim := func(field int, payload []byte) []byte {
-		out := varint(uint64(field)<<3 | 2)
+		out := varint(uint64(field)<<3 | wireBytes)
 		out = append(out, varint(uint64(len(payload)))...)
 		return append(out, payload...)
 	}
 	domain := func(typ int, value string, attrs ...string) []byte {
 		var body []byte
 		if typ != 0 {
-			body = append(body, varint(uint64(1)<<3|0)...)
+			body = append(body, varint(uint64(1)<<3|wireVarint)...)
 			body = append(body, varint(uint64(typ))...)
 		}
 		body = append(body, lenDelim(2, []byte(value))...)
 		for _, a := range attrs {
 			attr := lenDelim(1, []byte(a))
-			attr = append(attr, varint(uint64(2)<<3|0)...)
+			attr = append(attr, varint(uint64(2)<<3|wireVarint)...)
 			attr = append(attr, varint(1)...)
 			body = append(body, lenDelim(3, attr)...)
 		}

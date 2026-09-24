@@ -99,7 +99,7 @@ func validHost(host string) error {
 	if len(host) > maxHostLen {
 		return fmt.Errorf("超过 %d 字节", maxHostLen)
 	}
-	for _, label := range strings.Split(host, ".") {
+	for label := range strings.SplitSeq(host, ".") {
 		if label == "" {
 			return fmt.Errorf("有空 label")
 		}

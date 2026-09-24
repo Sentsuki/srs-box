@@ -200,7 +200,7 @@ func TestCollapseIsIdempotent(t *testing.T) {
 	}
 
 	want := s.Values(FieldDomainSuffix)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		other := build()
 		other.Collapse()
 		if got := other.Values(FieldDomainSuffix); !reflect.DeepEqual(got, want) {

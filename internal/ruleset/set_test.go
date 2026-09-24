@@ -36,8 +36,8 @@ func TestOptionsCoversAllFields(t *testing.T) {
 func TestFieldNamesMatchSingBox(t *testing.T) {
 	tags := map[string]bool{}
 	rt := reflect.TypeFor[option.DefaultHeadlessRule]()
-	for i := 0; i < rt.NumField(); i++ {
-		tag := rt.Field(i).Tag.Get("json")
+	for field := range rt.Fields() {
+		tag := field.Tag.Get("json")
 		if name, _, _ := strings.Cut(tag, ","); name != "" && name != "-" {
 			tags[name] = true
 		}
@@ -84,7 +84,7 @@ func TestOptionsIsDeterministic(t *testing.T) {
 		return string(raw)
 	}
 	first := build()
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		if got := build(); got != first {
 			t.Fatalf("产出不稳定:\n%s\n%s", first, got)
 		}

@@ -48,7 +48,7 @@ func TestNormalizeHostTooLong(t *testing.T) {
 		t.Error("64 字节的 label 应当被拒绝")
 	}
 	long := ""
-	for i := 0; i < 26; i++ {
+	for range 26 {
 		long += "abcdefghij."
 	}
 	if _, err := NormalizeHost(long + "com"); err == nil {

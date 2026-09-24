@@ -1,6 +1,7 @@
 package ruleset
 
 import (
+	"slices"
 	"sort"
 
 	C "github.com/sagernet/sing-box/constant"
@@ -136,7 +137,7 @@ func (s *RuleSet) Ports(f Field) []uint16 {
 	for v := range m {
 		out = append(out, v)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	slices.Sort(out)
 	return out
 }
 
@@ -167,7 +168,7 @@ func (s *RuleSet) Counts() []struct {
 		Name  string
 		Count int
 	}
-	for f := Field(0); f < fieldCount; f++ {
+	for f := range fieldCount {
 		n := len(s.strs[f]) + len(s.ports[f])
 		if n > 0 {
 			out = append(out, struct {
@@ -194,7 +195,7 @@ func (s *RuleSet) Counts() []struct {
 // 拆开成多条则是 OR，这才是"这些值任意命中一个就算命中"的意思。
 func (s *RuleSet) Options() option.PlainRuleSet {
 	rules := make([]option.HeadlessRule, 0, int(fieldCount)+len(s.verbatim))
-	for f := Field(0); f < fieldCount; f++ {
+	for f := range fieldCount {
 		var def option.DefaultHeadlessRule
 		if f.IsPort() {
 			ports := s.Ports(f)

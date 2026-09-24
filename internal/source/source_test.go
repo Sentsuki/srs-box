@@ -58,9 +58,9 @@ func TestHTTPFetchAndParse(t *testing.T) {
 
 // 同一个地址被多个规则集引用时只抓一次。
 func TestHTTPDedupesURLs(t *testing.T) {
-	var hits int32
+	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		atomic.AddInt32(&hits, 1)
+		hits.Add(1)
 		fmt.Fprint(w, "example.com\n")
 	}))
 	defer srv.Close()
@@ -73,15 +73,15 @@ func TestHTTPDedupesURLs(t *testing.T) {
 	if err := src.Prepare(context.Background(), []string{srv.URL}); err != nil {
 		t.Fatal(err)
 	}
-	if n := atomic.LoadInt32(&hits); n != 1 {
+	if n := hits.Load(); n != 1 {
 		t.Errorf("抓了 %d 次，应当只抓 1 次", n)
 	}
 }
 
 func TestHTTPRetriesThenSucceeds(t *testing.T) {
-	var hits int32
+	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		if atomic.AddInt32(&hits, 1) < 3 {
+		if hits.Add(1) < 3 {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -97,7 +97,7 @@ func TestHTTPRetriesThenSucceeds(t *testing.T) {
 	if err := src.Feed(srv.URL, Options{}, set); err != nil {
 		t.Fatalf("重试之后应当成功: %v", err)
 	}
-	if n := atomic.LoadInt32(&hits); n != 3 {
+	if n := hits.Load(); n != 3 {
 		t.Errorf("请求了 %d 次, want 3", n)
 	}
 }
@@ -105,9 +105,9 @@ func TestHTTPRetriesThenSucceeds(t *testing.T) {
 // 4xx 重试没有意义，不该浪费退避时间。
 func TestHTTPDoesNotRetryDeadStatuses(t *testing.T) {
 	for _, code := range []int{400, 403, 404, 410, 451} {
-		var hits int32
+		var hits atomic.Int32
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			atomic.AddInt32(&hits, 1)
+			hits.Add(1)
 			w.WriteHeader(code)
 		}))
 		src := NewHTTP(opts(t))
@@ -117,7 +117,7 @@ func TestHTTPDoesNotRetryDeadStatuses(t *testing.T) {
 		if err := src.Feed(srv.URL, Options{}, ruleset.New("t")); err == nil {
 			t.Errorf("HTTP %d 应当失败", code)
 		}
-		if n := atomic.LoadInt32(&hits); n != 1 {
+		if n := hits.Load(); n != 1 {
 			t.Errorf("HTTP %d 请求了 %d 次，不该重试", code, n)
 		}
 		srv.Close()

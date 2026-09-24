@@ -57,7 +57,7 @@ func listRemote(t *testing.T, remote, branch string) []string {
 	t.Helper()
 	out := run(t, "", "--no-pager", "-C", remote, "ls-tree", "--name-only", branch)
 	var names []string
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
 		if line != "" {
 			names = append(names, line)
 		}
