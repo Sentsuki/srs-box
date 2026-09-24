@@ -268,3 +268,30 @@ func sortedKeys(m map[string]struct{}) []string {
 	sort.Strings(out)
 	return out
 }
+
+// SingleRule 把一个值归一之后装成一条只含该字段的 default 规则。
+//
+// 给解析层构造逻辑规则子项用。逻辑规则走 AddVerbatim，绕开了 Add 那条归一化
+// 管道；把归一和装配绑在这一个函数里，调用方就没有"忘了 normalize"的机会 ——
+// Python 版那里只有一句注释在提醒，而 DST-PORT,443 忘了归一会产出字符串端口，
+// 让 sing-box 拒绝编译整个规则集。
+func SingleRule(f Field, raw string) (option.HeadlessRule, error) {
+	if !f.valid() {
+		return option.HeadlessRule{}, invalid(f, raw, "不支持的字段")
+	}
+	var def option.DefaultHeadlessRule
+	if f.IsPort() {
+		port, err := NormalizePort(raw)
+		if err != nil {
+			return option.HeadlessRule{}, invalid(f, raw, err.Error())
+		}
+		setPorts(&def, f, []uint16{port})
+	} else {
+		value, err := normalizeString(f, raw)
+		if err != nil {
+			return option.HeadlessRule{}, err
+		}
+		setStrings(&def, f, []string{value})
+	}
+	return option.HeadlessRule{Type: C.RuleTypeDefault, DefaultOptions: def}, nil
+}
