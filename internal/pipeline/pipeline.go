@@ -25,9 +25,17 @@ import (
 
 // dropValuesContaining 是硬编码的水印过滤。
 //
-// 只有一条，不值得开成配置项；但丢弃条数会出现在摘要里 —— 旧实现把这条藏在
-// 处理逻辑内部，静默丢规则且没有任何提示。
-var dropValuesContaining = []string{"ruleset.skk.moe"}
+// 不值得开成配置项；但丢弃条数会出现在摘要里 —— 旧实现把这条藏在处理逻辑内部，
+// 静默丢规则且没有任何提示。
+//
+// 用 skk.moe 而不是更精确的 ruleset.skk.moe：skk 的水印有两种形态，后者只盖住
+// 一种，另一种（7h15.ru1353t.1s.m4d3.by.5ukk4w.skk.moe，leetspeak 的
+// "this ruleset is made by sukkaw"）会漏进几乎每个产物。
+//
+// 代价是**连带删掉 sukka 自己的真实服务域名**（pic.skk.moe、img.skk.moe、
+// latency-test.skk.moe、speedtest-net-servers.cdn.skk.moe 等）。这是刻意的取舍：
+// 宁可少几条自用域名，也不要每个产物里都挂着别人的水印。
+var dropValuesContaining = []string{"skk.moe"}
 
 // Options 是一次运行的参数。
 type Options struct {
