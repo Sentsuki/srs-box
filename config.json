@@ -121,6 +121,9 @@
     "geosite-google": {
       "geosite": [
         "google"
+      ],
+      "inline": [
+        "DOMAIN-KEYWORD,google"
       ]
     },
     "geosite-youtube": {
