@@ -14,7 +14,7 @@ func TestSmokeRealSources(t *testing.T) {
 	if os.Getenv("SRSBOX_SMOKE") == "" {
 		t.Skip("需要网络，设 SRSBOX_SMOKE=1 运行")
 	}
-	cfg, err := config.Load("../../doc/config.example.json")
+	cfg, err := config.Load("../../config.json")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,8 +4,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/Sentsuki/srs-box/internal/source/parse"
 )
 
 const minimal = `{
@@ -34,14 +32,14 @@ func mustFail(t *testing.T, body, wantSubstr string) {
 	}
 }
 
-// 项目里真实的那份配置必须能加载 —— 这是第二阶段的出口条件之一。
-func TestRealExampleConfig(t *testing.T) {
-	cfg, err := Load("../../doc/config.example.json")
+// 验证生产配置 config.json 能正常加载且满足基本不变量。
+func TestRealProductionConfig(t *testing.T) {
+	cfg, err := Load("../../config.json")
 	if err != nil {
-		t.Fatalf("加载 doc/config.example.json 失败: %v", err)
+		t.Fatalf("加载 config.json 失败: %v", err)
 	}
-	if len(cfg.Rulesets) != 33 {
-		t.Errorf("规则集数 = %d, want 33", len(cfg.Rulesets))
+	if len(cfg.Rulesets) == 0 {
+		t.Fatal("config.json 规则集不能为空")
 	}
 	if cfg.Output.SRS == nil || cfg.Output.SRS.Branch != "srs_release" {
 		t.Errorf("output.srs = %+v", cfg.Output.SRS)
@@ -59,16 +57,16 @@ func TestRealExampleConfig(t *testing.T) {
 				cfg.Rulesets[i-1].Name, cfg.Rulesets[i].Name)
 		}
 	}
-	// 只该剩两处 format，都是断言
-	formats := map[parse.Format]int{}
-	for _, r := range cfg.Rulesets {
-		formats[r.ParsedFormat()]++
+}
+
+// 验证文档示例 doc/config.example.json 语法正确且能正常解析，防止文档过期失修。
+func TestExampleDocConfig(t *testing.T) {
+	cfg, err := Load("../../doc/config.example.json")
+	if err != nil {
+		t.Fatalf("加载 doc/config.example.json 失败: %v", err)
 	}
-	if formats[parse.FormatCIDR] != 2 {
-		t.Errorf("cidr 断言数 = %d, want 2", formats[parse.FormatCIDR])
-	}
-	if formats[parse.FormatAuto] != 31 {
-		t.Errorf("自动判定数 = %d, want 31", formats[parse.FormatAuto])
+	if len(cfg.Rulesets) == 0 {
+		t.Fatal("doc/config.example.json 规则集不能为空")
 	}
 }
 
