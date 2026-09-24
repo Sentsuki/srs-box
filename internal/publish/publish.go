@@ -164,12 +164,12 @@ func publishOne(ctx context.Context, t Target, produced, configured map[string]b
 		return stats, err
 	}
 	if !changed {
-		progress(opts, "  %s: 无变化，跳过推送（更新 %d，保留 %d，孤儿 %d）",
+		progress(opts, "  %s: 无变化，跳过推送（产出 %d，保留 %d，孤儿 %d）",
 			t.Branch, stats.Updated, stats.Retained, stats.Orphaned)
 		return stats, nil
 	}
 	if opts.DryRun {
-		progress(opts, "  %s: dry-run，不推送（更新 %d，保留 %d，孤儿 %d）",
+		progress(opts, "  %s: dry-run，不推送（产出 %d，保留 %d，孤儿 %d）",
 			t.Branch, stats.Updated, stats.Retained, stats.Orphaned)
 		return stats, nil
 	}
@@ -182,7 +182,7 @@ func publishOne(ctx context.Context, t Target, produced, configured map[string]b
 		return stats, err
 	}
 	stats.Pushed = true
-	progress(opts, "  %s: 已推送（更新 %d，保留 %d，孤儿 %d）",
+	progress(opts, "  %s: 已推送（产出 %d，保留 %d，孤儿 %d）",
 		t.Branch, stats.Updated, stats.Retained, stats.Orphaned)
 	return stats, nil
 }

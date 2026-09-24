@@ -263,7 +263,7 @@ func publishCmd(args []string) int {
 		if s.Pushed {
 			verb = "已推送"
 		}
-		fmt.Printf("%s: %s（更新 %d，保留 %d，清理孤儿 %d）\n",
+		fmt.Printf("%s: %s（产出 %d，保留 %d，清理孤儿 %d）\n",
 			s.Branch, verb, s.Updated, s.Retained, s.Orphaned)
 	}
 	return 0
