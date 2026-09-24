@@ -194,3 +194,5 @@ baseline/
 config.old.json.bak
 *.egg-info/
 sing-geosite-main
+domain-list-community
+sing-box-testing
