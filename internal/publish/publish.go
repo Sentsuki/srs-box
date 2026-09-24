@@ -295,9 +295,12 @@ func (g *git) run(ctx context.Context, inWork bool, extra ...string) ([]byte, er
 	cmd.Stdout = &out
 	cmd.Stderr = &errBuf
 	if err := cmd.Run(); err != nil {
-		// 被信号打断时 git 是被 kill 的，err 只是个退出状态，调用方
+		// 跑到一半被打断时 git 是被 kill 的，err 只是个退出状态，调用方
 		// errors.Is(err, context.Canceled) 认不出来 —— 于是一次 Ctrl-C 会
 		// 报成"发布失败"。把中断原样带出去。
+		//
+		// （ctx 在启动前就已取消是另一回事：那时 CommandContext 直接返回
+		// ctx.Err()，本来就认得出来。这里管的是启动之后那一段。）
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return out.Bytes(), fmt.Errorf("git %s 被中断: %w", extra[0], ctxErr)
 		}

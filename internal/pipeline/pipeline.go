@@ -15,7 +15,6 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
-	"sync"
 
 	"github.com/Sentsuki/srs-box/internal/config"
 	"github.com/Sentsuki/srs-box/internal/emit"
@@ -377,14 +376,12 @@ func build(ctx context.Context, cfg *config.Config, specs []*config.Ruleset, sou
 	// 持有大 map 会把内存推高。
 	group, gctx := errgroup.WithContext(ctx)
 	group.SetLimit(runtime.GOMAXPROCS(0))
-	var mu sync.Mutex
 
+	// 不需要加锁：每个 goroutine 只写 results 里自己那个下标，互不相交，
+	// 切片本身也不会扩容。加锁并不会更安全，只会让人以为这里有竞争。
 	for i, spec := range specs {
 		group.Go(func() error {
-			res := buildOne(gctx, cfg, spec, sources, opts)
-			mu.Lock()
-			results[i] = res
-			mu.Unlock()
+			results[i] = buildOne(gctx, cfg, spec, sources, opts)
 			return nil
 		})
 	}

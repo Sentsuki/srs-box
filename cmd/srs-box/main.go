@@ -82,7 +82,11 @@ func (s *stringsFlag) String() string     { return strings.Join(*s, ",") }
 func (s *stringsFlag) Set(v string) error { *s = append(*s, v); return nil }
 
 // notifyContext 让 Ctrl-C 一路传到每个 HTTP 请求，下载立刻断。
-func notifyContext() (context.Context, context.CancelFunc) {
+// notifyContext 是个变量，为的是测试能换掉它。
+//
+// "中断退 130"是对 CI 的契约，而只有注入一个已取消的 context 才验得了它：
+// Windows 上没法给自己发 SIGTERM，真发信号的测试也只能是不稳定的。
+var notifyContext = func() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
 

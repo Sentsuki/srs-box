@@ -356,7 +356,7 @@ func validateRuleset(r *Ruleset) error {
 	where := "rulesets." + r.Name
 	if !nameRe.MatchString(r.Name) {
 		return errf(where, "规则集名非法。名字会直接作为输出文件名，"+
-			"只允许字母、数字、点、下划线和连字符，且不能以点或连字符开头")
+			"只允许字母、数字和 . _ - ! @，且必须以字母或数字开头")
 	}
 	if r.Inputs.empty() {
 		return errf(where, "一个输入都没有 —— 至少要有 sources / files / geosite / inline 之一")
