@@ -16,6 +16,7 @@ import (
 
 	"github.com/Sentsuki/srs-box/internal/config"
 	"github.com/Sentsuki/srs-box/internal/pipeline"
+	"github.com/Sentsuki/srs-box/internal/publish"
 	"github.com/Sentsuki/srs-box/internal/report"
 )
 
@@ -32,7 +33,9 @@ func run(args []string) int {
 	}
 	switch args[0] {
 	case "build":
-		return build(args[1:])
+		return buildCmd(args[1:])
+	case "publish":
+		return publishCmd(args[1:])
 	case "version", "--version", "-V":
 		fmt.Println("srs-box", version)
 		return 0
@@ -51,6 +54,7 @@ func usage() {
 
 用法:
   srs-box build [选项]
+  srs-box publish [选项]
   srs-box version
 
 build 选项:
@@ -61,6 +65,15 @@ build 选项:
       --report PATH     写出机器可读的运行报告
       --github-summary  写 GitHub 步骤摘要并发出注解
   -q, --quiet           只输出摘要，不输出进度
+
+publish 选项:
+  -c, --config PATH     配置文件（默认 config.json），用来取发布目标
+      --report PATH     build 写出的运行报告（默认 run-report.json）
+      --remote URL      仓库地址，默认由 GITHUB_REPOSITORY 推断
+  -n, --dry-run         只算不推
+  -q, --quiet           不输出进度
+
+publish 从环境变量 GITHUB_TOKEN 取推送凭据。
 `)
 }
 
@@ -69,7 +82,12 @@ type stringsFlag []string
 func (s *stringsFlag) String() string     { return strings.Join(*s, ",") }
 func (s *stringsFlag) Set(v string) error { *s = append(*s, v); return nil }
 
-func build(args []string) int {
+// notifyContext 让 Ctrl-C 一路传到每个 HTTP 请求，下载立刻断。
+func notifyContext() (context.Context, context.CancelFunc) {
+	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+}
+
+func buildCmd(args []string) int {
 	fs := flag.NewFlagSet("build", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var (
@@ -101,8 +119,7 @@ func build(args []string) int {
 		return 2
 	}
 
-	// Ctrl-C 一路传到每个 HTTP 请求，下载立刻断。
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := notifyContext()
 	defer stop()
 
 	progress := func(format string, args ...any) {
@@ -156,6 +173,98 @@ func build(args []string) int {
 	}
 	if strict && counts[report.StatusFailed] > 0 {
 		return 1
+	}
+	return 0
+}
+
+func publishCmd(args []string) int {
+	fs := flag.NewFlagSet("publish", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	var (
+		cfgPath string
+		repPath string
+		remote  string
+		dryRun  bool
+		quiet   bool
+	)
+	fs.StringVar(&cfgPath, "config", "config.json", "配置文件路径")
+	fs.StringVar(&cfgPath, "c", "config.json", "配置文件路径（简写）")
+	fs.StringVar(&repPath, "report", "run-report.json", "运行报告路径")
+	fs.StringVar(&remote, "remote", "", "仓库地址")
+	fs.BoolVar(&dryRun, "dry-run", false, "只算不推")
+	fs.BoolVar(&dryRun, "n", false, "只算不推（简写）")
+	fs.BoolVar(&quiet, "quiet", false, "不输出进度")
+	fs.BoolVar(&quiet, "q", false, "不输出进度（简写）")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "配置有误: %v\n", err)
+		return 2
+	}
+	rep, err := report.LoadJSON(repPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		return 2
+	}
+
+	var targets []publish.Target
+	for _, t := range []struct {
+		ext string
+		a   *config.Artifact
+	}{{"srs", cfg.Output.SRS}, {"json", cfg.Output.JSON}} {
+		// 没写 branch = 只本地生成不发布。
+		if t.a == nil || t.a.Branch == "" {
+			continue
+		}
+		targets = append(targets, publish.Target{Dir: t.a.Dir, Branch: t.a.Branch, Ext: t.ext})
+	}
+	if len(targets) == 0 {
+		fmt.Fprintln(os.Stderr, "配置里没有任何带 branch 的产物，无事可做")
+		return 0
+	}
+
+	if remote == "" {
+		repo := os.Getenv("GITHUB_REPOSITORY")
+		if repo == "" {
+			fmt.Fprintln(os.Stderr, "错误: 没有 --remote，也没有 GITHUB_REPOSITORY")
+			return 2
+		}
+		remote = "https://github.com/" + repo
+	}
+
+	progress := func(format string, args ...any) {
+		fmt.Fprintf(os.Stderr, format+"\n", args...)
+	}
+	if quiet {
+		progress = nil
+	}
+	if !rep.Authoritative && progress != nil {
+		progress("规则集名单不完整，本次跳过孤儿清理")
+	}
+
+	ctx, stop := notifyContext()
+	defer stop()
+
+	stats, err := publish.Run(ctx, rep, targets, publish.Options{
+		Remote:   remote,
+		Token:    os.Getenv("GITHUB_TOKEN"),
+		DryRun:   dryRun,
+		Progress: progress,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "错误: %v\n", err)
+		return 1
+	}
+	for _, s := range stats {
+		verb := "无变化"
+		if s.Pushed {
+			verb = "已推送"
+		}
+		fmt.Printf("%s: %s（更新 %d，保留 %d，清理孤儿 %d）\n",
+			s.Branch, verb, s.Updated, s.Retained, s.Orphaned)
 	}
 	return 0
 }

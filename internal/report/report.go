@@ -7,6 +7,7 @@ package report
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -376,4 +377,70 @@ func (r *Run) WriteGitHubSummary(annotations io.Writer) error {
 		fmt.Fprintf(file, "- `%s` — %s\n", res.Name, reason)
 	}
 	return nil
+}
+
+// ---------------- 读回 ----------------
+
+// File 是运行报告读回来的形态。
+//
+// 写它和读它的是同一个程序（build 与 publish），所以这是**内部契约**，
+// 不再需要顾虑 shell 里的 jq 表达式。
+type File struct {
+	Schema        int
+	Authoritative bool
+	Entries       []Entry
+}
+
+// Entry 是报告里的一条规则集。
+type Entry struct {
+	Name   string
+	Status Status
+}
+
+// LoadJSON 读回一份运行报告。
+func LoadJSON(path string) (*File, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("读运行报告失败: %w", err)
+	}
+	var f reportFile
+	if err := json.Unmarshal(raw, &f); err != nil {
+		return nil, fmt.Errorf("运行报告不是合法 JSON: %w", err)
+	}
+	if f.Schema != Schema {
+		return nil, fmt.Errorf("运行报告 schema 是 %d，本程序写的是 %d —— "+
+			"报告和二进制版本对不上，重新跑一次 build", f.Schema, Schema)
+	}
+	out := &File{Schema: f.Schema, Authoritative: f.Authoritative}
+	for _, e := range f.Rulesets {
+		out.Entries = append(out.Entries, Entry{Name: e.Name, Status: e.Status})
+	}
+	if len(out.Entries) == 0 {
+		return nil, errors.New("运行报告里一个规则集都没有")
+	}
+	return out, nil
+}
+
+// Produced 返回本次真正产出的规则集名。这些要覆盖发布。
+func (f *File) Produced() []string { return f.namesWith(StatusOK) }
+
+// Configured 返回配置声明的全部规则集名。不在这个集合里的已发布文件是孤儿。
+func (f *File) Configured() []string {
+	out := make([]string, 0, len(f.Entries))
+	for _, e := range f.Entries {
+		out = append(out, e.Name)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func (f *File) namesWith(status Status) []string {
+	var out []string
+	for _, e := range f.Entries {
+		if e.Status == status {
+			out = append(out, e.Name)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
