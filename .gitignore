@@ -193,3 +193,4 @@ output/
 baseline/
 config.old.json.bak
 *.egg-info/
+sing-geosite-main
