@@ -153,9 +153,9 @@ Geosite 数据源及相关配置：
 | --- | --- |
 | `差集 -N` | 规则被 `exclude` 完全覆盖，整条删除 |
 | `排除改窄 N` | 规则被部分排除，改写为更窄的等价规则后保留（无点 `domain_suffix` 去掉 apex 即带点形式；CIDR 裁掉一段仍是一组 CIDR） |
-| `排除表达不了 N` | 规则与 `exclude` 部分重叠，但 headless rule 无法表达该差集，规则原样保留 |
+| `排除不可表达 N` | 规则与 `exclude` 部分重叠，但 headless rule 无法表达该差集，规则原样保留 |
 
-`排除表达不了` 是唯一一种排除不生效的情形。例如产物中有 `domain_suffix: a.com`、
+`排除不可表达` 是唯一一种排除不生效的情形。例如产物中有 `domain_suffix: a.com`、
 而 `exclude` 中为 `domain: x.a.com`，差集应为「`a.com` 及其子域但不含 `x.a.com`」，
 拆分字段的规则写不出这种形式。处理方式是改写配置：缩小主规则集的输入范围，或在
 `exclude` 中直接排除 `a.com`。
