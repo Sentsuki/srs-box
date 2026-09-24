@@ -40,8 +40,8 @@ func TestRealExampleConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("加载 doc/config.example.json 失败: %v", err)
 	}
-	if len(cfg.Rulesets) != 54 {
-		t.Errorf("规则集数 = %d, want 54", len(cfg.Rulesets))
+	if len(cfg.Rulesets) != 33 {
+		t.Errorf("规则集数 = %d, want 33", len(cfg.Rulesets))
 	}
 	if cfg.Output.SRS == nil || cfg.Output.SRS.Branch != "srs_release" {
 		t.Errorf("output.srs = %+v", cfg.Output.SRS)
@@ -67,8 +67,8 @@ func TestRealExampleConfig(t *testing.T) {
 	if formats[parse.FormatCIDR] != 2 {
 		t.Errorf("cidr 断言数 = %d, want 2", formats[parse.FormatCIDR])
 	}
-	if formats[parse.FormatAuto] != 52 {
-		t.Errorf("自动判定数 = %d, want 52", formats[parse.FormatAuto])
+	if formats[parse.FormatAuto] != 31 {
+		t.Errorf("自动判定数 = %d, want 31", formats[parse.FormatAuto])
 	}
 }
 

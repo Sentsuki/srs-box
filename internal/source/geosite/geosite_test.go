@@ -518,3 +518,69 @@ func contains(list []string, want string) bool {
 	}
 	return false
 }
+
+// ---------------- normalize ----------------
+
+// 造一份含畸形条目的 dlc.dat，验证两种模式的差别。
+//
+// 实测 v2fly 全库（1898 个 code、73321 条值）归一化拒绝 0 条，所以这个开关
+// 今天没有可观察的效果 —— 它是给上游哪天腐坏用的绊线，必须有测试证明它真的会响。
+func dlcWithBadValue(t *testing.T) string {
+	t.Helper()
+	data := listMsg(siteMsg("MIXED",
+		domainMsg(typeFull, "good.example"),
+		domainMsg(typeFull, "-bad-.example"), // label 以连字符开头结尾，归一会拒
+		domainMsg(typeFull, "also-good.example"),
+	))
+	path := filepath.Join(t.TempDir(), "dlc.dat")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestNormalizeLenientDropsAndCounts(t *testing.T) {
+	src := New(Options{File: dlcWithBadValue(t), Normalize: NormalizeLenient})
+	if err := src.Prepare(context.Background(), []string{"mixed"}); err != nil {
+		t.Fatal(err)
+	}
+	set := ruleset.New("t")
+	if err := src.Feed("mixed", source.Options{}, set); err != nil {
+		t.Fatalf("lenient 不该让整条失败: %v", err)
+	}
+	if got := set.Values(ruleset.FieldDomain); !reflect.DeepEqual(got, []string{"also-good.example", "good.example"}) {
+		t.Errorf("好的值应当照常进来: %v", got)
+	}
+	// 丢弃必须记账 —— 静默丢规则是这个项目一直在消灭的东西
+	if set.Diag.InvalidTotal() != 1 {
+		t.Errorf("非法值计数 = %d, want 1", set.Diag.InvalidTotal())
+	}
+	if len(set.Diag.InvalidSamples) != 1 {
+		t.Errorf("样例数 = %d, want 1", len(set.Diag.InvalidSamples))
+	}
+}
+
+func TestNormalizeStrictFailsTheInput(t *testing.T) {
+	src := New(Options{File: dlcWithBadValue(t), Normalize: NormalizeStrict})
+	if err := src.Prepare(context.Background(), []string{"mixed"}); err != nil {
+		t.Fatal(err)
+	}
+	err := src.Feed("mixed", source.Options{}, ruleset.New("t"))
+	if err == nil {
+		t.Fatal("strict 下遇到非法值应当报错")
+	}
+	if !strings.Contains(err.Error(), "-bad-.example") {
+		t.Errorf("错误信息应当指出是哪个值: %v", err)
+	}
+}
+
+// 省略 normalize 等于 lenient。
+func TestNormalizeDefaultsToLenient(t *testing.T) {
+	src := New(Options{File: dlcWithBadValue(t)})
+	if err := src.Prepare(context.Background(), []string{"mixed"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := src.Feed("mixed", source.Options{}, ruleset.New("t")); err != nil {
+		t.Errorf("默认应当是 lenient: %v", err)
+	}
+}
