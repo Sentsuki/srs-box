@@ -64,7 +64,12 @@
     "block-ads": {
       "sources": [
         "https://github.com/TG-Twilight/AWAvenue-Ads-Rule/raw/refs/heads/main/Filters/AWAvenue-Ads-Rule-Singbox.json"
-      ]
+      ],
+      "exclude": {
+        "geosite": [
+          "google@ads"
+        ]
+      }
     },
     "block-dns": {
       "sources": [
@@ -106,7 +111,7 @@
         "https://core.telegram.org/resources/cidr.txt"
       ]
     },
-    "geosite-geolocation-cn": {
+    "geosite-cn": {
       "geosite": [
         "geolocation-cn",
         "category-*-cn",

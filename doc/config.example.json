@@ -20,182 +20,61 @@
     "normalize": "lenient"
   },
   "rulesets": {
-    "apple-ai": {
-      "files": [
-        "data/Apple_Intelligence.json"
-      ]
-    },
-    "apple-api": {
+    "adblock": {
       "sources": [
-        "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/api-domain.list"
+        "https://example.com/rules/adblock.json"
       ]
     },
-    "apple-api-ip": {
+    "adguard-filter": {
+      "format": "adguard",
       "sources": [
-        "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/api-ip.list"
+        "https://example.com/rules/filters.txt"
       ]
     },
-    "apple-cdn": {
-      "sources": [
-        "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/cdn-domain.list"
-      ]
-    },
-    "apple-nocn-cdn": {
-      "sources": [
-        "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/no-cn-cdn-domain.list"
-      ]
-    },
-    "apple-rules": {
-      "sources": [
-        "https://github.com/Elysian-Realme/FuGfConfig/raw/refs/heads/main/ConfigFile/sing-box/Apple/domain.list"
-      ]
-    },
-    "block-ads": {
-      "sources": [
-        "https://github.com/TG-Twilight/AWAvenue-Ads-Rule/raw/refs/heads/main/Filters/AWAvenue-Ads-Rule-Singbox.json"
-      ]
-    },
-    "block-dns": {
-      "sources": [
-        "https://raw.githubusercontent.com/VirgilClyne/GetSomeFries/main/ruleset/HTTPDNS.Block.yaml"
-      ]
-    },
-    "cn-ip": {
-      "format": "cidr",
-      "aggregate": true,
-      "sources": [
-        "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/chinanet46.txt",
-        "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cmcc46.txt",
-        "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/unicom46.txt",
-        "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cernet46.txt",
-        "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/cstnet46.txt",
-        "https://github.com/gaoyifan/china-operator-ip/raw/refs/heads/ip-lists/drpeng46.txt"
-      ]
-    },
-    "normal-ai": {
-      "sources": [
-        "https://raw.githubusercontent.com/viewer12/OverseasAI.list/main/rule/Clash/OverseasAI/OverseasAI.list"
-      ]
-    },
-    "riot": {
-      "sources": [
-        "https://github.com/LM-Firefly/Rules/raw/refs/heads/master/Game/Riot.list"
-      ]
-    },
-    "skk-download": {
-      "sources": [
-        "https://ruleset.skk.moe/sing-box/domainset/download.json",
-        "https://ruleset.skk.moe/sing-box/non_ip/download.json"
-      ]
-    },
-    "skk-microsoft-cdn": {
-      "sources": [
-        "https://ruleset.skk.moe/sing-box/non_ip/microsoft_cdn.json"
-      ]
-    },
-    "telegram-ip": {
-      "format": "cidr",
-      "aggregate": true,
-      "sources": [
-        "https://core.telegram.org/resources/cidr.txt"
-      ]
-    },
-    "geosite-geolocation-cn": {
+    "cn-domains": {
       "geosite": [
         "geolocation-cn",
-        "category-*-cn",
-        "category-*@cn"
+        "category-*-cn"
       ]
     },
-    "geosite-google": {
-      "geosite": [
-        "google"
-      ]
-    },
-    "geosite-youtube": {
-      "geosite": [
-        "youtube"
-      ]
-    },
-    "geosite-reddit": {
-      "geosite": [
-        "reddit"
-      ]
-    },
-    "geosite-amazon": {
-      "geosite": [
-        "amazon"
-      ]
-    },
-    "geosite-telegram": {
+    "custom-composite": {
+      "sources": [
+        "https://example.com/rules/custom.list"
+      ],
+      "files": [
+        "data/example-rules.json"
+      ],
       "geosite": [
         "telegram"
+      ],
+      "inline": [
+        "DOMAIN-SUFFIX,internal.example.com",
+        "DOMAIN-KEYWORD,local"
       ]
     },
-    "geosite-line": {
-      "geosite": [
-        "line"
+    "direct-cidr": {
+      "format": "cidr",
+      "aggregate": true,
+      "sources": [
+        "https://example.com/rules/china_ip.txt"
+      ],
+      "inline": [
+        "192.168.0.0/16",
+        "10.0.0.0/8"
       ]
     },
-    "geosite-epicgames": {
+    "google-no-ads": {
       "geosite": [
-        "epicgames"
-      ]
+        "google"
+      ],
+      "exclude": {
+        "geosite": [
+          "google@ads"
+        ]
+      }
     },
-    "geosite-steam": {
-      "geosite": [
-        "steam"
-      ]
-    },
-    "geosite-xbox": {
-      "geosite": [
-        "xbox"
-      ]
-    },
-    "geosite-paypal": {
-      "geosite": [
-        "paypal"
-      ]
-    },
-    "geosite-oracle": {
-      "geosite": [
-        "oracle"
-      ]
-    },
-    "geosite-microsoft": {
-      "geosite": [
-        "microsoft"
-      ]
-    },
-    "geosite-protonmail": {
-      "geosite": [
-        "protonmail"
-      ]
-    },
-    "geosite-nvidia": {
-      "geosite": [
-        "nvidia"
-      ]
-    },
-    "geosite-x": {
-      "geosite": [
-        "x"
-      ]
-    },
-    "geosite-meta": {
-      "geosite": [
-        "meta"
-      ]
-    },
-    "geosite-wikimedia": {
-      "geosite": [
-        "wikimedia"
-      ]
-    },
-    "geosite-spotify": {
-      "geosite": [
-        "spotify"
-      ]
-    }
+    "simple-shorthand": [
+      "https://example.com/rules/proxy-list.json"
+    ]
   }
 }
