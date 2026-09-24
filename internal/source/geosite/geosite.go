@@ -78,16 +78,24 @@ func (s *Source) Prepare(ctx context.Context, keys []string) error {
 	if len(keys) == 0 {
 		return nil
 	}
-	s.once.Do(func() { s.load(ctx) })
-	if s.loadErr != nil {
-		// dlc.dat 拿不到或校验失败是**整类输入**不可用，引用它的规则集各自记账。
-		return s.loadErr
+	if err := s.Load(ctx); err != nil {
+		return err
 	}
 	if len(s.odd) > 0 && s.opts.Progress != nil {
 		s.opts.Progress("geosite: 发现 %d 个与自己名字矛盾的属性 code（如 %s）—— "+
 			"未自动排除，需要的话写进 exclude", len(s.odd), strings.Join(s.odd[:min(3, len(s.odd))], ", "))
 	}
 	return nil
+}
+
+// Load 加载 dlc.dat，与 Prepare 共用同一次 once，重复调用只下载一次。
+//
+// 单独开出来是给 bulk 用的：规则集**名单本身**来自 dlc.dat，所以配了 bulk
+// 就必须加载，哪怕这次没有任何规则集引用 geosite code。
+func (s *Source) Load(ctx context.Context) error {
+	s.once.Do(func() { s.load(ctx) })
+	// dlc.dat 拿不到或校验失败是**整类输入**不可用，引用它的规则集各自记账。
+	return s.loadErr
 }
 
 func (s *Source) load(ctx context.Context) {

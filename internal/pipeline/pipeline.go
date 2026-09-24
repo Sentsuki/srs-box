@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strings"
 	"sync"
@@ -51,34 +52,45 @@ type Options struct {
 // 只有配置层面的问题（--only 指向不存在的规则集）才返回 error；源挂了、
 // 解析失败、写盘失败都记进各自的 Result。
 func Run(ctx context.Context, cfg *config.Config, opts Options) (*report.Run, error) {
-	selected, err := selectRulesets(cfg, opts.Only)
-	if err != nil {
-		return nil, err
+	sources := newRegistry(cfg)
+
+	// 顺序是被依赖关系定死的：geosite 先就位 → 展开 bulk → 选择 → 抓其余输入。
+	//
+	// bulk 生成的名字来自 dlc.dat 里的数据，而 --only 要能点名这些名字，
+	// 所以选择只能发生在展开之后。反过来把选择放在最前面的话，--only 对
+	// geosite- 开头的名字一律报"没有这些规则集"。
+	sources.prepareGeosite(ctx, cfg, opts.Only, opts.Progress)
+	bulk, bulkComplete := expandBulk(cfg, sources, opts)
+
+	// 候选名单 = 配置里写的 + bulk 展开的，--only 对两者一视同仁。
+	//
+	// 名单**无条件**包含 bulk 的名字，哪怕这次一个都不构建：configured 是
+	// "发布方眼里该存在的全部产物"，不是"这次跑了哪些"。漏掉一个名字等于告诉
+	// 发布方那是孤儿 —— --only 跑一次再 publish，分支上上千个 geosite-*.srs
+	// 会被当孤儿全部删掉，而摘要上看不出任何异常。本次不构建的那些会落成
+	// skipped，发布方照旧保留上一次的文件。
+	candidates := make([]*config.Ruleset, 0, len(cfg.Rulesets)+len(bulk))
+	candidates = append(candidates, cfg.Rulesets...)
+	candidates = append(candidates, bulk...)
+	sort.Slice(candidates, func(i, j int) bool { return candidates[i].Name < candidates[j].Name })
+
+	configured := make([]string, 0, len(candidates))
+	for _, r := range candidates {
+		configured = append(configured, r.Name)
 	}
 
-	configured := make([]string, 0, len(cfg.Rulesets))
-	for _, r := range cfg.Rulesets {
-		configured = append(configured, r.Name)
+	selected, err := selectRulesets(candidates, opts.Only)
+	if err != nil {
+		return nil, err
 	}
 	selectedSet := map[string]bool{}
 	for _, r := range selected {
 		selectedSet[r.Name] = true
 	}
 
-	sources := newRegistry(cfg)
-	if err := sources.prepare(ctx, selected, opts.Progress); err != nil {
+	// 抓取只按选中的来 —— --only 不该把没选的地址也抓一遍。
+	if err := sources.prepareInputs(ctx, selected, opts.Progress); err != nil {
 		return nil, err
-	}
-
-	// bulk 必须在 dlc.dat 加载之后展开 —— 它生成的名字来自运行时的数据。
-	bulk, bulkComplete := expandBulk(cfg, sources, opts)
-	if len(opts.Only) == 0 {
-		selected = append(selected, bulk...)
-		for _, r := range bulk {
-			configured = append(configured, r.Name)
-			selectedSet[r.Name] = true
-		}
-		sort.Strings(configured)
 	}
 
 	results := build(ctx, cfg, selected, sources, opts)
@@ -159,16 +171,20 @@ func expandBulk(cfg *config.Config, sources *registry, opts Options) (out []*con
 	return out, len(skipped) == 0
 }
 
-func selectRulesets(cfg *config.Config, only []string) ([]*config.Ruleset, error) {
+// selectRulesets 从候选名单里挑出 --only 点名的那些。
+//
+// 候选里既有配置写死的，也有 bulk 展开出来的 —— 两者在这里没有区别，
+// --only geosite-cn 和 --only block-ads 一样能用。
+func selectRulesets(candidates []*config.Ruleset, only []string) ([]*config.Ruleset, error) {
 	if len(only) == 0 {
-		return cfg.Rulesets, nil
+		return candidates, nil
 	}
 	want := map[string]bool{}
 	for _, name := range only {
 		want[name] = true
 	}
 	var chosen []*config.Ruleset
-	for _, r := range cfg.Rulesets {
+	for _, r := range candidates {
 		if want[r.Name] {
 			chosen = append(chosen, r)
 			delete(want, r.Name)
@@ -180,7 +196,8 @@ func selectRulesets(cfg *config.Config, only []string) ([]*config.Ruleset, error
 			missing = append(missing, name)
 		}
 		sort.Strings(missing)
-		return nil, fmt.Errorf("配置里没有这些规则集: %v", missing)
+		return nil, fmt.Errorf("没有这些规则集: %v —— 配置里的名字和 geosite.bulk "+
+			"展开出来的名字都找过了（bulk 展开失败时它的名字自然也点不到）", missing)
 	}
 	return chosen, nil
 }
@@ -235,16 +252,61 @@ func geositeNormalize(cfg *config.Config) geosite.Normalize {
 	return ""
 }
 
-// prepare 先把全部输入的 key 收齐，再让每种源各准备一次。
+// prepareGeosite 让 geosite 这一类输入就位。它必须先于 bulk 展开和 --only 选择。
+//
+// 这一步跑的时候选择还没做（选择要等 bulk 展开，展开又要等这一步），所以它自己
+// 按 --only 过一遍配置里的名字 —— 否则 --only 一个纯 HTTP 的规则集也会白下
+// 一份 2MB 的 dlc.dat。bulk 生成的名字在这里点不到，也不需要：配了 bulk 就
+// 一定加载。
+//
+// 配了 bulk 一定加载，哪怕没有任何规则集引用 geosite code：规则集**名单本身**
+// 来自 dlc.dat。以前这里只看"引用了哪些 code"，于是一份只有 bulk、没有显式
+// geosite 输入的配置，bulk 永远展不开。
+func (r *registry) prepareGeosite(ctx context.Context, cfg *config.Config, only []string, progress func(string, ...any)) {
+	want := map[string]bool{}
+	for _, name := range only {
+		want[name] = true
+	}
+	var codes []string
+	for _, spec := range cfg.Rulesets {
+		if len(only) > 0 && !want[spec.Name] {
+			continue
+		}
+		codes = append(codes, spec.Geosite...)
+		if spec.Exclude != nil {
+			codes = append(codes, spec.Exclude.Geosite...)
+		}
+	}
+	needBulk := cfg.Geosite != nil && cfg.Geosite.Bulk != nil
+	if len(codes) == 0 && !needBulk {
+		return
+	}
+
+	var err error
+	if len(codes) > 0 {
+		err = r.geosite.Prepare(ctx, codes)
+	} else {
+		err = r.geosite.Load(ctx)
+	}
+	if err != nil {
+		// dlc.dat 拿不到不该让整次运行失败 —— 引用它的规则集各自记账，
+		// 其余几十个照常产出。这正是"每个规则集是独立单元"的延伸。
+		r.geositeDown = true
+		if progress != nil {
+			progress("%v —— 引用 geosite 的规则集本次不会更新", err)
+		}
+	}
+}
+
+// prepareInputs 把选中规则集的 URL 与本地文件一次性备齐。
 //
 // 收齐之后再准备，是"同一个地址被多个规则集引用只抓一次"能成立的原因 ——
-// 换成边构建边抓就做不到了。
-func (r *registry) prepare(ctx context.Context, specs []*config.Ruleset, progress func(string, ...any)) error {
-	var urls, files, codes []string
+// 换成边构建边抓就做不到了。geosite 不在这里，它已经在 prepareGeosite 就位。
+func (r *registry) prepareInputs(ctx context.Context, specs []*config.Ruleset, progress func(string, ...any)) error {
+	var urls, files []string
 	collect := func(in config.Inputs) {
 		urls = append(urls, in.Sources...)
 		files = append(files, in.Files...)
-		codes = append(codes, in.Geosite...)
 	}
 	for _, spec := range specs {
 		collect(spec.Inputs)
@@ -259,18 +321,7 @@ func (r *registry) prepare(ctx context.Context, specs []*config.Ruleset, progres
 	if err := r.http.Prepare(ctx, urls); err != nil {
 		return err
 	}
-	if err := r.file.Prepare(ctx, files); err != nil {
-		return err
-	}
-	if err := r.geosite.Prepare(ctx, codes); err != nil {
-		// dlc.dat 拿不到不该让整次运行失败 —— 引用它的规则集各自记账，
-		// 其余几十个照常产出。这正是"每个规则集是独立单元"的延伸。
-		r.geositeDown = true
-		if progress != nil {
-			progress("%v —— 引用 geosite 的规则集本次不会更新", err)
-		}
-	}
-	return nil
+	return r.file.Prepare(ctx, files)
 }
 
 func dedupe(in []string) []string {
@@ -331,10 +382,37 @@ func build(ctx context.Context, cfg *config.Config, specs []*config.Ruleset, sou
 	return results
 }
 
-func buildOne(ctx context.Context, cfg *config.Config, spec *config.Ruleset, sources *registry, opts Options) *report.Result {
-	res := &report.Result{Name: spec.Name}
+// panicProbe 是测试注入点。panic 隔离这件事只有真的 panic 一次才验得了，
+// 而生产路径上没有任何能稳定触发 panic 的输入。nil 时只是一次判空。
+var panicProbe func(name string)
+
+func buildOne(ctx context.Context, cfg *config.Config, spec *config.Ruleset, sources *registry, opts Options) (res *report.Result) {
+	res = &report.Result{Name: spec.Name}
 	set := ruleset.New(spec.Name)
 	feedOpts := source.Options{Format: spec.ParsedFormat()}
+
+	// "每个规则集是独立单元"这条原则在 panic 面前也得成立。
+	//
+	// 没有这道防线的话，任意一个规则集里的 panic（sing-box 的 matcher 对空串
+	// 直接取 domain[0]、srs 编码器遇到没想到的输入）会带走整个进程：几十个
+	// 已经算好的规则集一个都不会落盘，摘要也不会打印 —— 与"某一类源全挂就
+	// 整体失败"是同一种事故，而那正是这一层重构要消灭的东西。
+	//
+	// 栈打到 stderr（诊断），摘要和报告里只留一句话（结果）—— 日志级别只该
+	// 影响诊断，不该影响结果。
+	defer func() {
+		p := recover()
+		if p == nil {
+			return
+		}
+		fmt.Fprintf(os.Stderr, "规则集 %s 内部错误: %v\n%s\n", spec.Name, p, debug.Stack())
+		res.OK = false
+		res.Err = fmt.Errorf("内部错误（已隔离，其余规则集不受影响）: %v —— 这是 bug，栈见 stderr", p)
+		res.Diag = set.Diag
+	}()
+	if panicProbe != nil {
+		panicProbe(spec.Name)
+	}
 
 	failed, attempted := sources.feedAll(spec.Inputs, feedOpts, set)
 	res.FailedSources = failed
