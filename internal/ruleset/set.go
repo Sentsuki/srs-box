@@ -257,3 +257,14 @@ func setPorts(def *option.DefaultHeadlessRule, f Field, v []uint16) {
 		def.Port = list
 	}
 }
+
+// sortedKeys 返回 map 的键，已排序。Go 的 map 迭代顺序随机，任何会影响产物
+// 或删除决策的遍历都必须先定序 —— 否则收敛结果可能随运行而变。
+func sortedKeys(m map[string]struct{}) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
