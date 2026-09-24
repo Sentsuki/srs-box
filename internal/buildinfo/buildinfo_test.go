@@ -1,8 +1,9 @@
 package buildinfo
 
-import "strings"
-
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // UA 必须跟着 Version 走 —— 这正是拆出这个包要解决的问题，
 // 手写一份 UA 常量就等于又开了一个会漂的副本。
