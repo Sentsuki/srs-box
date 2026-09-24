@@ -1,6 +1,8 @@
 # 配置说明
 
-配置文件默认是项目根目录的 `config.json`，可用 `-c` 指定路径。
+配置文件默认位于项目根目录的 `config.json`，可通过 `-c` / `--config` 参数指定路径。
+
+## 配置示例
 
 ```json
 {
@@ -9,175 +11,179 @@
     "srs":  { "dir": "output/srs",  "branch": "srs_release" },
     "json": { "dir": "output/json", "branch": "json_release" }
   },
-  "fetch":   { "concurrency": 16, "timeout": "30s", "retries": 3 },
-  "geosite": { "normalize": "lenient" },
-  "rulesets": { }
-}
-```
-
-没有 `schema` 字段 —— 防手滑靠**拒绝未知键**：忘了删的 `sing_box`、打错的
-`rulesets_version`，都会当场报错并列出认识的键。这比版本号更准，而且对拼写错误
-同样有效。
-
-## 顶层字段
-
-| 字段 | 必填 | 说明 |
-| --- | --- | --- |
-| `ruleset_version` | 是 | 目标 rule-set 版本。上限跟着链接进来的 sing-box 走，不用手工同步 |
-| `output` | 是 | 产物：种类 → 写到哪、发到哪 |
-| `fetch` | 否 | HTTP 输入源设置，默认并发 16、超时 30s、重试 3 次 |
-| `geosite` | 否 | geosite 输入源设置 |
-| `rulesets` | 是 | 规则集定义 |
-
-### output
-
-键名就是扩展名，所以不需要 `ext`；`dir` 只出现一次。
-
-* **省略 `branch`** = 只本地生成，不发布
-* **整条省略** = 根本不产出这种产物
-
-### geosite
-
-| 键 | 说明 |
-| --- | --- |
-| `repo` | dlc.dat 的上游，默认 `v2fly/domain-list-community` |
-| `file` | 本地 dlc.dat，非空时不走网络 |
-| `normalize` | `lenient`（默认，非法值丢弃并记账）或 `strict`（非法值即失败） |
-| `bulk` | 批量展开，见下 |
-
-dlc.dat 每次都会比对同一 release 里的 `dlc.dat.sha256sum`。不走 GitHub API，
-所以不需要 token、不受限流。
-
-## rulesets
-
-键名就是输出文件名。**只有一种条目形状**：名字 → 一组输入 + 几个选项。
-URL 写全，没有 `base` / `items` / `prefix`。
-
-```json
-"rulesets": {
-  "telegram": {
-    "sources": ["https://ruleset.skk.moe/sing-box/non_ip/telegram.json"],
-    "geosite": ["telegram"]
+  "fetch": {
+    "concurrency": 16,
+    "timeout": "30s",
+    "retries": 3
+  },
+  "geosite": {
+    "repo": "v2fly/domain-list-community",
+    "normalize": "lenient"
+  },
+  "rulesets": {
+    "direct": {
+      "sources": [
+        "https://example.com/rules.json"
+      ],
+      "geosite": ["cn"]
+    }
   }
 }
 ```
 
-### 四种输入，可以混写
+## 顶层字段
 
-| 键 | 内容 |
-| --- | --- |
-| `sources` | URL |
-| `files` | 本地路径（限工作目录内） |
-| `geosite` | geosite code 或 glob |
-| `inline` | 直接写在配置里的规则行 |
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `ruleset_version` | integer | 是 | - | 目标 rule-set 规则集版本（1 ~ sing-box 支持的最高版本） |
+| `output` | object | 是 | - | 输出产物配置，至少需要包含 `srs` 或 `json` 之一 |
+| `fetch` | object | 否 | - | HTTP 下载与并发控制参数 |
+| `geosite` | object | 否 | - | Geosite 数据源与预处理配置 |
+| `rulesets` | object | 是 | - | 规则集定义集合 |
 
-裸字符串或裸数组等于 `sources`，这是唯一的简写：
+---
 
-```json
-"block-ads": "https://example.com/ads.json",
-"skk-reject": ["https://example.com/a.json", "https://example.com/b.json"]
-```
+## output
 
-四个键都接受单个字符串或数组。
+定义不同格式产物的输出目录与发布分支。
 
-### 选项
-
-| 键 | 默认 | 说明 |
+| 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `exclude` | 无 | 一个对象，键是上面四种输入；从本集合做差 |
-| `format` | 自动 | 只在两种情况写，见下 |
-| `aggregate` | `false` | 合并相邻/包含的 CIDR |
-| `collapse` | `true` | 等价写法收敛 |
+| `srs` | object | 二进制 `.srs` 规则集配置 |
+| `json` | object | JSON 格式规则集配置 |
 
-### exclude
+每个产物对象包含以下字段：
 
-`exclude` 接受和输入完全一样的四个键，含义也一样：
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `dir` | string | 是 | - | 本地输出目录 |
+| `branch` | string | 否 | 无 | Git 发布分支。若省略则仅在本地生成，不执行发布 |
+
+---
+
+## fetch
+
+HTTP 规则源下载配置：
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `concurrency` | integer | `16` | 最大并发下载数（需 >= 1） |
+| `timeout` | string / number | `"30s"` | 单个请求超时时间（支持 `"30s"`、`"1m"` 等格式，或秒数数字） |
+| `retries` | integer | `3` | 请求失败重试次数（需 >= 0） |
+
+---
+
+## geosite
+
+Geosite 数据源及相关配置：
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `repo` | string | `"v2fly/domain-list-community"` | 上游 GitHub 仓库，用于自动下载最新 `dlc.dat` |
+| `file` | string | 无 | 本地 `dlc.dat` 文件路径。若指定则使用本地文件，不请求网络 |
+| `normalize` | string | `"lenient"` | 域名归一化模式：`"lenient"`（忽略非法值）或 `"strict"`（非法值立即报错） |
+| `bulk` | object | 无 | 批量展开生成规则集配置 |
+
+### geosite.bulk
+
+根据 geosite code 批量生成规则集，生成的规则集名称为 `${prefix}${code}`：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `prefix` | string | 否 | 生成规则集名称的前缀（如 `"geosite-"`） |
+| `include` | string / string[] | 是 | 包含的 geosite code 模式（支持 glob，全量写 `["*"]`） |
+| `exclude` | string / string[] | 否 | 排除的 geosite code 模式（支持 glob，如 `["*@*"]` 排除属性变体） |
+
+---
+
+## rulesets
+
+规则集配置字典。键名即规则集名称（对应输出文件名，支持字母、数字、点、下划线、减号、`!`、`@`），值为规则集配置对象。
+
+### 输入源
+
+一个规则集支持同时配置以下多种输入源（均支持单个字符串或字符串数组）：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `sources` | string / string[] | HTTP/HTTPS 远程规则文件 URL |
+| `files` | string / string[] | 本地规则文件路径（相对工作目录） |
+| `geosite` | string / string[] | Geosite code 名称或 glob 模式（如 `"cn"`、`"google@ads"`、`"category-*-cn"`） |
+| `inline` | string / string[] | 内联规则文本（如 `"DOMAIN-SUFFIX,example.com"`） |
+
+> **简写形式**：若规则集的值直接为字符串或字符串数组，等价于仅配置 `sources`。例如：
+> ```json
+> "block-ads": "https://example.com/ads.json"
+> ```
+
+### 规则集选项
+
+| 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `exclude` | object | 无 | 排除规则，支持与上述相同的输入源字段（`sources`、`files`、`geosite`、`inline`） |
+| `format` | string | 自动识别 | 规则格式（默认为空，自动判定） |
+| `aggregate` | boolean | `false` | 是否合并相邻或包含的 CIDR / IP 网段 |
+| `collapse` | boolean | `true` | 是否收敛等价规则（如冗余的子域名去重） |
+
+#### exclude 说明
+
+`exclude` 用于从当前规则集中排除特定规则。例如保留 `google` 但排除其广告域名：
 
 ```json
-"reject": {
-  "sources": ["https://ruleset.skk.moe/sing-box/non_ip/reject.json"],
-  "exclude": { "files": ["data/allowlist.txt"], "inline": ["DOMAIN-SUFFIX,ok.example"] }
+"google": {
+  "geosite": ["google"],
+  "exclude": {
+    "geosite": ["google@ads"]
+  }
 }
 ```
 
-geosite 的属性差集就是这么写的 —— 要 google 但不要它的广告域名：
+*若 `exclude` 中定义的所有源均获取失败，该规则集构建将判定为失败，以防排除失效导致规则泄露。*
 
-```json
-"google": { "geosite": ["google"], "exclude": { "geosite": ["google@ads"] } }
-```
+#### format 说明
 
-**`exclude` 的输入全部取不到时，该规则集会失败而不是产出。** 否则本该排除的
-东西会留在产物里，而产物看起来完全正常。
+大部分常见格式无需显式指定，程序会自动根据内容识别（sing-box JSON、SRS 二进制、Clash / Surge / QX / 纯文本行列表等）。
 
-## format
+仅在以下场景需要显式指定：
 
-**一般不用写。** 内容自己会说明它是什么：
-
-```
-魔数是 SRS ?             → 按编译好的 rule-set 读
-去 BOM/空白后首字节是 { 或 [ → 按 JSON 读
-其余一切                  → 按行读
-```
-
-按行读本来就是格式无关的：先看首段是不是已知类型词（`DOMAIN-SUFFIX,` 之类），
-不是就按值自身的形态定字段。所以 Clash `.list`、Surge `.list`、Quantumult X、
-扁平 YAML 序列、裸域名表、裸 CIDR 表全都走这一条路。
-
-只有两种情况需要写 `format`：
-
-| 取值 | 为什么必须写 |
+| 取值 | 说明 |
 | --- | --- |
-| `adguard` | 语法与裸域名列表有重叠，判不出来；而且 `@@` 例外规则会编译成带 `invert` 的嵌套逻辑规则，猜错就是**语义反转** |
-| `cidr` / `domainset` | 它们不是格式，是**断言** —— 容器就是按行读，区别只在"混进别的东西就当场失败"。防的正是上游返回 HTTP 200 的 HTML 错误页这种悄悄腐坏 |
+| `adguard` | AdGuard 规则语法（支持 `||example.com^`、`@@` 例外规则等） |
+| `cidr` | 断言格式：严格限制内容仅允许 CIDR/IP，混入其他内容则报错 |
+| `domainset` | 断言格式：严格限制内容仅允许域名，混入其他内容则报错 |
 
-## geosite code 与 glob
+---
 
-一个 code 就是 v2fly `domain-list-community` 里一份清单的名字（`cn`、`netflix`、
-`geolocation-!cn`）。**属性变体** `code@attr` 也是可寻址的 code：
+## 命令行工具
 
-```json
-"geosite": ["google"]        // 全部 google 域名
-"geosite": ["google@ads"]    // 其中带 @ads 标记的那些
-```
-
-带属性的域名**同时留在父 code 里** —— 属性是标记不是移出，所以"要 google 但不要
-广告"需要做差。
-
-glob 是 `path.Match` 语义，匹配的是 **code 名**不是域名：
-
-```json
-"geosite": ["category-*-cn", "*@cn"]
-```
-
-* `!` 是**字面字符**不是取反（`geolocation-!cn` 要原样写全），glob 没有取反操作符
-* 一个 code 都没匹配上会报错 —— 上游改名时静默产出零条规则是最难发现的失败形态
-
-### bulk
-
-唯一的"一条配置生成多个规则集"的口子。名字是 `prefix + code`：
-
-```json
-"geosite": {
-  "bulk": { "prefix": "geosite-", "include": ["category-games*"], "exclude": ["*@*"] }
-}
-```
-
-* `include` 必填，想要全量就显式写 `["*"]`（默认全量意味着一次手滑就推上千个文件）
-* `exclude` 在批量时基本必写，否则 `category-games*` 会把 `category-games@cn`
-  这类属性变体也各自生成一个规则集
-* 与 `rulesets` 里的名字撞名会跳过并**标记名单不完整**，发布时据此跳过孤儿清理
-
-## 命令行
+### 构建 (build)
 
 ```bash
-srs-box build   [-c CONFIG] [--only NAME]... [-n] [--strict] [--report PATH] [--github-summary] [-q]
-srs-box publish [-c CONFIG] [--report PATH] [--remote URL] [-n] [-q]
+srs-box build [选项]
 ```
 
-`build` 的退出码：一个规则集都没产出才返回 1（真·基础设施坏了）。单个源失败
-不是失败 —— 逐规则集隔离的全部意义就在这里。加 `--strict` 则任一失败即非零。
+| 选项 | 简写 | 说明 |
+| --- | --- | --- |
+| `--config PATH` | `-c` | 配置文件路径（默认 `config.json`） |
+| `--only NAME` | | 仅构建指定的规则集（可多次指定） |
+| `--dry-run` | `-n` | 仅执行解析与处理，不写入磁盘 |
+| `--strict` | | 严格模式：任一规则集失败则整体以非零退出码退出 |
+| `--report PATH` | | 输出构建运行报告 JSON 路径 |
+| `--github-summary` | | 输出 GitHub Actions 步骤摘要与注解 |
+| `--quiet` | `-q` | 静默模式，仅输出摘要，不输出过程进度 |
 
-`publish` 从 `GITHUB_TOKEN` 取推送凭据，远端默认由 `GITHUB_REPOSITORY` 推断。
-它按运行报告分三态处理：本次产出的覆盖，配置里有但失败或被 `--only` 跳过的
-**保留上一次发布的文件**，不在配置里的当孤儿删掉。规则集名单本身不可信时
-（`bulk` 的通配符没能展开）跳过孤儿清理。
+### 发布 (publish)
+
+```bash
+srs-box publish [选项]
+```
+
+| 选项 | 简写 | 说明 |
+| --- | --- | --- |
+| `--config PATH` | `-c` | 配置文件路径（默认 `config.json`） |
+| `--report PATH` | | 指定构建报告文件路径（默认 `run-report.json`） |
+| `--remote URL` | | Git 远端仓库地址（默认根据 `GITHUB_REPOSITORY` 推断） |
+| `--dry-run` | `-n` | 仅演练发布流程，不推送到远端分支 |
+| `--quiet` | `-q` | 静默模式，不输出详细进度 |
+
+> **发布认证**：`publish` 从环境变量 `GITHUB_TOKEN` 读取推送凭据。
