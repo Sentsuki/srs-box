@@ -109,13 +109,19 @@ func AllFields() []Field {
 	return out
 }
 
-// InDomainGroup 报告该字段属于 sing-box 的"目标地址"匹配组。
+// InDestinationGroup 报告该字段属于 sing-box 的"目标地址"匹配组。
 //
-// 这四个字段在一条 rule 里本来就是 OR（同组内任意命中即命中），拆成多条
-// rule 一条也不多匹配 —— 但**会**让规则集失去可合并性，见 Options 的注释。
-func (f Field) InDomainGroup() bool {
+// 组内是 OR（任意命中即命中），所以这些字段挤在一条 rule 里和拆成多条 rule
+// 的匹配结果相同 —— 但只有挤在一条里，规则集才是**可合并**的，引用方写
+// {"domain_suffix": [...], "rule_set": [...]} 时才会得到 OR。见 Options 的注释。
+//
+// ip_cidr 也在这一组。DNS 预匹配阶段它会被忽略（那时还没有 IP），这是上游
+// 有意为之 —— 很多规则集根本没把 IP 和域名分清，按 IP 提前判定会造成大量错配，
+// 所以宁可在预匹配阶段不看 IP。既然如此，就没有理由为了保住那条延后通路而
+// 把 ip_cidr 单独留一条、赔掉整个规则集的可合并性。
+func (f Field) InDestinationGroup() bool {
 	switch f {
-	case FieldDomain, FieldDomainSuffix, FieldDomainKeyword, FieldDomainRegex:
+	case FieldDomain, FieldDomainSuffix, FieldDomainKeyword, FieldDomainRegex, FieldIPCIDR:
 		return true
 	default:
 		return false
