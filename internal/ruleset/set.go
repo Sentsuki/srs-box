@@ -191,11 +191,47 @@ func (s *RuleSet) Counts() []struct {
 // .json 和 .srs 都由它产出，两种产物因此不可能语义漂移 —— Python 版是先写
 // JSON 再交给子进程编译，中间隔了一次文件往返。
 //
-// 每个字段单独成一条 rule：同一条 rule 内的字段按 match group 组合（组间 AND），
-// 拆开成多条则是 OR，这才是"这些值任意命中一个就算命中"的意思。
+// 不同 match group 的字段各自成一条 rule：同一条 rule 内组间是 AND，拆成多条
+// 才是 OR，这才是"这些值任意命中一个就算命中"的意思。
+//
+// 但四个域名字段必须挤在**同一条** rule 里，哪怕它们本来就同组（拆开不会少
+// 匹配）。原因在使用侧：sing-box 遇到
+//
+//	{"domain_suffix": ["sagernet.org"], "rule_set": ["geosite-google"]}
+//
+// 这种写法时，会把规则集里的那条 rule 并进外层规则的匹配组，让 domain_suffix
+// 与规则集成为 OR。而这条合并只在规则集**恰好只有一条** rule 时生效
+// （route/rule/rule_item_rule_set.go 的 mergeableRuleIn），否则退化成
+// "domain_suffix 命中 **且** 规则集命中" —— 域名一个都匹配不上。
+// sing-geosite 的产物只有一条 rule，所以照着它来。
 func (s *RuleSet) Options() option.PlainRuleSet {
 	rules := make([]option.HeadlessRule, 0, int(fieldCount)+len(s.verbatim))
+
+	var domain option.DefaultHeadlessRule
+	domainUsed := false
 	for f := range fieldCount {
+		if !f.InDomainGroup() {
+			continue
+		}
+		if values := s.Values(f); len(values) > 0 {
+			setStrings(&domain, f, values)
+			domainUsed = true
+		}
+	}
+
+	for f := range fieldCount {
+		if f.InDomainGroup() {
+			// 域名组整条一起出，位置取第一个有值的成员 —— 输出顺序仍由
+			// 字段声明顺序决定。
+			if domainUsed {
+				rules = append(rules, option.HeadlessRule{
+					Type:           C.RuleTypeDefault,
+					DefaultOptions: domain,
+				})
+				domainUsed = false
+			}
+			continue
+		}
 		var def option.DefaultHeadlessRule
 		if f.IsPort() {
 			ports := s.Ports(f)

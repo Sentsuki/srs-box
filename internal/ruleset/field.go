@@ -108,3 +108,16 @@ func AllFields() []Field {
 	}
 	return out
 }
+
+// InDomainGroup 报告该字段属于 sing-box 的"目标地址"匹配组。
+//
+// 这四个字段在一条 rule 里本来就是 OR（同组内任意命中即命中），拆成多条
+// rule 一条也不多匹配 —— 但**会**让规则集失去可合并性，见 Options 的注释。
+func (f Field) InDomainGroup() bool {
+	switch f {
+	case FieldDomain, FieldDomainSuffix, FieldDomainKeyword, FieldDomainRegex:
+		return true
+	default:
+		return false
+	}
+}
