@@ -124,7 +124,12 @@
       ],
       "inline": [
         "DOMAIN-KEYWORD,google"
-      ]
+      ],
+      "exclude": {
+        "geosite": [
+          "youtube"
+        ]
+      }
     },
     "geosite-youtube": {
       "geosite": [
