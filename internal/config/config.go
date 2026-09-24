@@ -91,6 +91,8 @@ type Geosite struct {
 	Bulk      *Bulk  `json:"bulk,omitempty"`
 	// File 指定本地 dlc.dat，非空时不走网络 —— 离线跑，或者用自己从
 	// domain-list-community 源码树构建出来的那份。
+	//
+	// 与 rulesets.*.files 一样限工作目录内的相对路径。
 	File string `json:"file,omitempty"`
 }
 
@@ -333,6 +335,15 @@ func (c *Config) applyDefaults() error {
 		default:
 			return errf("geosite.normalize", "取值非法 %q，可选 lenient / strict", c.Geosite.Normalize)
 		}
+		// 和 rulesets.*.files 同一条线：配置是可以从别处拿来的，两个读本地
+		// 文件的口子不该一个管一个不管。dlc.dat 解析失败不会把文件内容带进
+		// 产物，所以危害比 files 小，但"配置只能读到工作目录内"这条边界
+		// 要么处处成立、要么不成立，留一个例外就等于没有。
+		if c.Geosite.File != "" {
+			if err := checkFile(c.Geosite.File, "geosite.file"); err != nil {
+				return err
+			}
+		}
 		if b := c.Geosite.Bulk; b != nil && len(b.Include) == 0 {
 			return errf("geosite.bulk.include", "不能为空 —— 想要全量就显式写 [\"*\"]。"+
 				"默认全量意味着一次手滑就往发布分支推上千个文件")
@@ -345,7 +356,7 @@ func validateRuleset(r *Ruleset) error {
 	where := "rulesets." + r.Name
 	if !nameRe.MatchString(r.Name) {
 		return errf(where, "规则集名非法。名字会直接作为输出文件名，"+
-			"只允许字母、数字、点、下划线和连字符，且不能以点或连字符开头")
+			"只允许字母、数字和 . _ - ! @，且必须以字母或数字开头")
 	}
 	if r.Inputs.empty() {
 		return errf(where, "一个输入都没有 —— 至少要有 sources / files / geosite / inline 之一")
@@ -415,7 +426,9 @@ func checkFile(raw, where string) error {
 	if raw == "" {
 		return errf(where, "路径不能为空")
 	}
-	if filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`) {
+	// 盘符要显式挡：filepath.IsAbs 在 Linux 上不认 C:\，于是同一份配置在
+	// Linux 跑就成了合法的"相对路径"。这条边界要么处处成立，要么不成立。
+	if filepath.IsAbs(raw) || strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, `\`) || hasDriveLetter(raw) {
 		return errf(where, "只能用工作目录内的相对路径: %q", raw)
 	}
 	clean := filepath.ToSlash(filepath.Clean(raw))
@@ -423,6 +436,14 @@ func checkFile(raw, where string) error {
 		return errf(where, "路径不能跳出工作目录: %q", raw)
 	}
 	return nil
+}
+
+func hasDriveLetter(raw string) bool {
+	if len(raw) < 2 || raw[1] != ':' {
+		return false
+	}
+	c := raw[0]
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
 // checkDuplicateKeys 扫一遍 token 流找同层重复键。

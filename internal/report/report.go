@@ -67,6 +67,29 @@ type Run struct {
 	// 会删光整个 geosite- 前缀。这条在旧的 shell 发布脚本里根本表达不出来，
 	// 它只看得见 configured.txt 里有什么，看不见"这份名单本身可不可信"。
 	Authoritative bool
+
+	// byName 是 Results 的索引，第一次用到时才建。
+	//
+	// Status 原先是线性扫，而 Counts / WriteJSON / WriteGitHubSummary 都对
+	// Configured 里的每个名字各调一次 —— 配了 geosite.bulk（1500+ code）时
+	// 是三处各两百万次字符串比较。Run 构造完就不再变，索引只建一次。
+	byName map[string]*Result
+}
+
+// index 返回名字到结果的映射，必要时重建。
+//
+// 条数对不上就重建，于是"取过一次 Status 之后又往 Results 里追加"不会读到
+// 陈旧的索引 —— 生产路径上不会这么用，但让缓存的正确性不依赖调用顺序更省心。
+func (r *Run) index() map[string]*Result {
+	if r.byName != nil && len(r.byName) == len(r.Results) {
+		return r.byName
+	}
+	byName := make(map[string]*Result, len(r.Results))
+	for _, res := range r.Results {
+		byName[res.Name] = res
+	}
+	r.byName = byName
+	return byName
 }
 
 // Status 返回某个规则集的结局。
@@ -74,13 +97,8 @@ func (r *Run) Status(name string) Status {
 	if len(r.Selected) > 0 && !r.Selected[name] {
 		return StatusSkipped
 	}
-	for _, res := range r.Results {
-		if res.Name == name {
-			if res.OK {
-				return StatusOK
-			}
-			return StatusFailed
-		}
+	if res, ok := r.index()[name]; ok && res.OK {
+		return StatusOK
 	}
 	return StatusFailed
 }
@@ -125,10 +143,7 @@ type reportEntry struct {
 // 上一次的文件），和配置里已经没有了（改名或删除，应当作孤儿清掉）。光看输出
 // 目录分不出这两者，所以这里把配置声明的全集连同每一项的状态一起写出来。
 func (r *Run) WriteJSON(path string) error {
-	byName := map[string]*Result{}
-	for _, res := range r.Results {
-		byName[res.Name] = res
-	}
+	byName := r.index()
 	entries := make([]reportEntry, 0, len(r.Configured))
 	for _, name := range r.Configured {
 		entry := reportEntry{Name: name, Status: r.Status(name)}
@@ -343,10 +358,7 @@ func thousands(n int) string {
 func (r *Run) WriteGitHubSummary(annotations io.Writer) error {
 	counts := r.Counts()
 	var failed []*Result
-	byName := map[string]*Result{}
-	for _, res := range r.Results {
-		byName[res.Name] = res
-	}
+	byName := r.index()
 	for _, name := range r.Configured {
 		if r.Status(name) == StatusFailed {
 			if res := byName[name]; res != nil {

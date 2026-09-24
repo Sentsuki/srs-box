@@ -10,6 +10,11 @@
 //	配置里有但失败   → 保留上一次发布的文件
 //	不在配置里       → 当孤儿删掉
 //
+// 发布分支**永远只有一个提交**：每次发布造一个无父提交顶上去。产物分支是
+// "当前快照"，它的历史没有任何使用者 —— 每天两个提交、几十个二进制文件，
+// 一年七百多个提交，旧版本的 blob 永远可达，远端只增不减。断掉父链之后旧对象
+// 立刻不可达，GitHub 的 gc 会回收它们。见 doc/doc.md「发布分支只有一个提交」。
+//
 // 还有第四态：规则集名单本身不可信时（geosite.bulk 的通配符没能展开），
 // **跳过孤儿清理**。否则一次 GitHub 抖动就会删光整个前缀。这条在旧的 shell 里
 // 根本表达不出来 —— 它只看得见 configured.txt 里有什么，看不见那份名单可不可信。
@@ -175,10 +180,11 @@ func publishOne(ctx context.Context, t Target, produced, configured map[string]b
 	}
 	msg := fmt.Sprintf("update %s: %d updated, %d retained, %d orphaned",
 		strings.TrimSuffix(t.Branch, "_release"), stats.Updated, stats.Retained, stats.Orphaned)
-	if err := g.commit(ctx, msg); err != nil {
+	commit, err := g.commitTree(ctx, msg)
+	if err != nil {
 		return stats, err
 	}
-	if err := g.push(ctx, t.Branch); err != nil {
+	if err := g.push(ctx, commit, t.Branch); err != nil {
 		return stats, err
 	}
 	stats.Pushed = true
@@ -216,6 +222,10 @@ type git struct {
 	work    string
 	remote  string
 	credFil string
+	// base 是 clone 下来的分支 tip。推送时拿它做 --force-with-lease 的预期值：
+	// 强推会盖掉别人的提交，而"盖掉的必须正是我读过的那一版"这个条件，
+	// 恰好等价于原先靠 non-fast-forward 拒绝拿到的那层保护。
+	base string
 }
 
 // newGit 准备 git 调用环境。
@@ -285,6 +295,15 @@ func (g *git) run(ctx context.Context, inWork bool, extra ...string) ([]byte, er
 	cmd.Stdout = &out
 	cmd.Stderr = &errBuf
 	if err := cmd.Run(); err != nil {
+		// 跑到一半被打断时 git 是被 kill 的，err 只是个退出状态，调用方
+		// errors.Is(err, context.Canceled) 认不出来 —— 于是一次 Ctrl-C 会
+		// 报成"发布失败"。把中断原样带出去。
+		//
+		// （ctx 在启动前就已取消是另一回事：那时 CommandContext 直接返回
+		// ctx.Err()，本来就认得出来。这里管的是启动之后那一段。）
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return out.Bytes(), fmt.Errorf("git %s 被中断: %w", extra[0], ctxErr)
+		}
 		// 只带 stderr，不带命令行 —— 命令行里有 credential 文件路径，
 		// 而且把完整 argv 打出去是 token 泄漏最常见的入口。
 		return out.Bytes(), fmt.Errorf("git %s: %w: %s",
@@ -310,6 +329,11 @@ func (g *git) cloneBranch(ctx context.Context, branch string) (bool, error) {
 		"--branch", branch, g.remote, g.work); err != nil {
 		return false, err
 	}
+	head, err := g.run(ctx, true, "rev-parse", "HEAD")
+	if err != nil {
+		return false, err
+	}
+	g.base = strings.TrimSpace(string(head))
 	return true, nil
 }
 
@@ -337,15 +361,42 @@ func (g *git) hasStagedChanges(ctx context.Context) (bool, error) {
 	if errors.As(err, &exit) && exit.ExitCode() == 1 {
 		return true, nil
 	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		return false, fmt.Errorf("git diff --cached 被中断: %w", ctxErr)
+	}
 	return false, fmt.Errorf("git diff --cached: %w", err)
 }
 
-func (g *git) commit(ctx context.Context, message string) error {
-	_, err := g.run(ctx, true, "commit", "--quiet", "-m", message)
-	return err
+// commitTree 用当前索引造一个**无父**提交，返回它的 sha。
+//
+// 走 write-tree + commit-tree 这对底层命令，而不是 checkout --orphan + commit：
+// 后者要先借一个临时分支名（还得防着跟发布分支撞名），而且"孤儿检出之后已暂存
+// 的改动还在不在索引里"要靠 checkout 的语义去推。这里直接拿索引造树，
+// HEAD 和工作区一动不动，读起来也就是它字面的意思。
+func (g *git) commitTree(ctx context.Context, message string) (string, error) {
+	tree, err := g.run(ctx, true, "write-tree")
+	if err != nil {
+		return "", err
+	}
+	sha, err := g.run(ctx, true, "commit-tree", strings.TrimSpace(string(tree)), "-m", message)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(sha)), nil
 }
 
-func (g *git) push(ctx context.Context, branch string) error {
-	_, err := g.run(ctx, true, "push", "--quiet", "origin", "HEAD:"+branch)
+// push 把 commit 推成分支的新 tip。
+//
+// 新提交没有父，所以对已存在的分支必然是 non-fast-forward，必须强推。用
+// --force-with-lease 而不是 --force：预期值是 clone 时读到的 tip，别人在这中间
+// 推过东西就会被拒绝，而不是被悄悄盖掉。分支还不存在时没有预期值可给，
+// 普通推送本来就只有分支仍不存在才会成功。
+func (g *git) push(ctx context.Context, commit, branch string) error {
+	args := []string{"push", "--quiet"}
+	if g.base != "" {
+		args = append(args, "--force-with-lease=refs/heads/"+branch+":"+g.base)
+	}
+	args = append(args, "origin", commit+":refs/heads/"+branch)
+	_, err := g.run(ctx, true, args...)
 	return err
 }

@@ -371,3 +371,20 @@ func TestRejectsMalformedJSON(t *testing.T) {
 	mustFail(t, ``, "")
 	mustFail(t, `[]`, "")
 }
+
+// geosite.file 和 rulesets.*.files 走同一条边界 —— 配置可能是从别处拿来的，
+// 留一个不受限的读文件口子就等于这条边界不存在。
+func TestGeositeFileStaysInWorkdir(t *testing.T) {
+	body := func(path string) string {
+		return `{"ruleset_version": 4, "output": {"srs": {"dir": "out"}},
+			"geosite": {"file": "` + path + `"},
+			"rulesets": {"a": {"geosite": ["cn"]}}}`
+	}
+	for _, bad := range []string{"../../etc/passwd", "/etc/passwd", `C:\\Windows\\win.ini`} {
+		mustFail(t, body(bad), "geosite.file")
+	}
+	cfg := load(t, body("data/dlc.dat"))
+	if cfg.Geosite.File != "data/dlc.dat" {
+		t.Errorf("工作目录内的相对路径应当原样保留，实际 %q", cfg.Geosite.File)
+	}
+}

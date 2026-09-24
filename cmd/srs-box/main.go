@@ -14,13 +14,12 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/Sentsuki/srs-box/internal/buildinfo"
 	"github.com/Sentsuki/srs-box/internal/config"
 	"github.com/Sentsuki/srs-box/internal/pipeline"
 	"github.com/Sentsuki/srs-box/internal/publish"
 	"github.com/Sentsuki/srs-box/internal/report"
 )
-
-const version = "0.3.0"
 
 func main() {
 	os.Exit(run(os.Args[1:]))
@@ -37,7 +36,7 @@ func run(args []string) int {
 	case "publish":
 		return publishCmd(args[1:])
 	case "version", "--version", "-V":
-		fmt.Println("srs-box", version)
+		fmt.Println("srs-box", buildinfo.Version)
 		return 0
 	case "help", "--help", "-h":
 		usage()
@@ -83,7 +82,11 @@ func (s *stringsFlag) String() string     { return strings.Join(*s, ",") }
 func (s *stringsFlag) Set(v string) error { *s = append(*s, v); return nil }
 
 // notifyContext 让 Ctrl-C 一路传到每个 HTTP 请求，下载立刻断。
-func notifyContext() (context.Context, context.CancelFunc) {
+// notifyContext 是个变量，为的是测试能换掉它。
+//
+// "中断退 130"是对 CI 的契约，而只有注入一个已取消的 context 才验得了它：
+// Windows 上没法给自己发 SIGTERM，真发信号的测试也只能是不稳定的。
+var notifyContext = func() (context.Context, context.CancelFunc) {
 	return signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 }
 
@@ -255,6 +258,13 @@ func publishCmd(args []string) int {
 		Progress: progress,
 	})
 	if err != nil {
+		// 与 build 一致：中断是 130，不是"发布失败"。发布是逐目标串行的，
+		// 被中断时前面的目标可能已经推上去了，说清楚是中断而不是出错，
+		// 才好判断要不要重跑。
+		if errors.Is(err, context.Canceled) {
+			fmt.Fprintln(os.Stderr, "已中断")
+			return 130
+		}
 		fmt.Fprintf(os.Stderr, "错误: %v\n", err)
 		return 1
 	}

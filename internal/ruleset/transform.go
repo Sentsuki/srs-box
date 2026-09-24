@@ -69,10 +69,7 @@ func (s *RuleSet) DropValuesContaining(needles []string) int {
 	}
 
 	removed := 0
-	for f, m := range s.strs {
-		if f.IsPort() {
-			continue
-		}
+	for _, m := range s.strs {
 		for v := range m {
 			if hits(v, lowered) {
 				delete(m, v)
