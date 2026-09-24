@@ -412,19 +412,211 @@ func TestLocalFileInput(t *testing.T) {
 	_ = dir
 }
 
-// geosite 输入还没实现 —— 必须明确报错，不能静默产出一个少了一半的规则集。
-func TestGeositeInputIsExplicitlyUnimplemented(t *testing.T) {
-	_, _ = setup(t)
-	cfg := load(t, `{
+// ---------------- geosite ----------------
+
+// makeDLC 造一份最小 dlc.dat（protobuf wire format 手搓，与 geosite 包的测试同法）。
+func makeDLC(t *testing.T, dir string) string {
+	t.Helper()
+	varint := func(v uint64) []byte {
+		var out []byte
+		for v >= 0x80 {
+			out = append(out, byte(v)|0x80)
+			v >>= 7
+		}
+		return append(out, byte(v))
+	}
+	lenDelim := func(field int, payload []byte) []byte {
+		out := varint(uint64(field)<<3 | 2)
+		out = append(out, varint(uint64(len(payload)))...)
+		return append(out, payload...)
+	}
+	domain := func(typ int, value string, attrs ...string) []byte {
+		var body []byte
+		if typ != 0 {
+			body = append(body, varint(uint64(1)<<3|0)...)
+			body = append(body, varint(uint64(typ))...)
+		}
+		body = append(body, lenDelim(2, []byte(value))...)
+		for _, a := range attrs {
+			attr := lenDelim(1, []byte(a))
+			attr = append(attr, varint(uint64(2)<<3|0)...)
+			attr = append(attr, varint(1)...)
+			body = append(body, lenDelim(3, attr)...)
+		}
+		return body
+	}
+	site := func(code string, domains ...[]byte) []byte {
+		body := lenDelim(1, []byte(code))
+		for _, d := range domains {
+			body = append(body, lenDelim(2, d)...)
+		}
+		return body
+	}
+	var data []byte
+	for _, s := range [][]byte{
+		site("GOOGLE", domain(2, "google.com"), domain(2, "doubleclick.net", "ads")),
+		site("NETFLIX", domain(2, "netflix.com")),
+	} {
+		data = append(data, lenDelim(1, s)...)
+	}
+	path := filepath.Join(dir, "dlc.dat")
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestGeositeInput(t *testing.T) {
+	_, dir := setup(t)
+	dlc := makeDLC(t, dir)
+	cfg := load(t, fmt.Sprintf(`{
   "ruleset_version": 4,
   "output": { "srs": { "dir": "out/srs" } },
-  "rulesets": { "cn": { "geosite": ["cn"] } }
-}`)
-	res := byName(runAll(t, cfg, Options{}))["cn"]
-	if res.OK {
-		t.Fatal("geosite 输入还没实现，不该假装成功")
+  "geosite": { "file": %q },
+  "rulesets": { "g": { "geosite": ["google"] } }
+}`, filepath.ToSlash(dlc)))
+
+	res := byName(runAll(t, cfg, Options{}))["g"]
+	if !res.OK {
+		t.Fatalf("geosite 输入应当成功: %v / %v", res.Err, res.FailedSources)
 	}
-	if len(res.FailedSources) != 1 || !strings.Contains(res.FailedSources[0], "尚未实现") {
-		t.Errorf("应当说清是没实现: %+v", res.FailedSources)
+	// RootDomain 产出 domain + 带点后缀，收敛压回无点后缀
+	if res.Rules != 2 {
+		t.Errorf("规则数 = %d, want 2（google.com 与 doubleclick.net）", res.Rules)
+	}
+}
+
+// 混写：URL + geosite code 进同一个规则集，这是"任意来源混合去重"的核心场景。
+func TestGeositeMixedWithHTTP(t *testing.T) {
+	base, dir := setup(t)
+	dlc := makeDLC(t, dir)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "geosite": { "file": %q },
+  "rulesets": { "mix": { "sources": ["%s/good"], "geosite": ["netflix"] } }
+}`, filepath.ToSlash(dlc), base))
+
+	res := byName(runAll(t, cfg, Options{}))["mix"]
+	if !res.OK {
+		t.Fatalf("混写应当成功: %v / %v", res.Err, res.FailedSources)
+	}
+	if res.Rules != 2 { // good.example（HTTP，收敛掉一条）+ netflix.com
+		t.Errorf("规则数 = %d, want 2", res.Rules)
+	}
+}
+
+// 属性差集：要 google 但不要它的广告域名。
+func TestGeositeAttributeExclude(t *testing.T) {
+	_, dir := setup(t)
+	dlc := makeDLC(t, dir)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "geosite": { "file": %q },
+  "rulesets": {
+    "g": { "geosite": ["google"], "exclude": { "geosite": ["google@ads"] } }
+  }
+}`, filepath.ToSlash(dlc)))
+
+	res := byName(runAll(t, cfg, Options{}))["g"]
+	if !res.OK {
+		t.Fatalf("应当成功: %v", res.Err)
+	}
+	if res.Rules != 1 {
+		t.Errorf("规则数 = %d, want 1（只剩 google.com）", res.Rules)
+	}
+	if res.Diag.Subtracted == 0 {
+		t.Error("差集没生效")
+	}
+}
+
+// dlc.dat 拿不到是**整类输入**不可用，不能让整次运行失败 ——
+// 引用 geosite 的规则集各自记账，其余照常产出。
+func TestGeositeFailureDoesNotSinkTheRun(t *testing.T) {
+	base, dir := setup(t)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "geosite": { "file": %q },
+  "rulesets": { "http-only": ["%s/good"], "geo": { "geosite": ["cn"] } }
+}`, filepath.ToSlash(filepath.Join(dir, "missing.dat")), base))
+
+	run := runAll(t, cfg, Options{})
+	got := byName(run)
+	if !got["http-only"].OK {
+		t.Errorf("不引用 geosite 的规则集不该受牵连: %v", got["http-only"].Err)
+	}
+	if got["geo"].OK {
+		t.Error("引用 geosite 的规则集应当失败")
+	}
+}
+
+// bulk 展开：一条配置生成多个规则集，名字来自运行时的数据。
+func TestGeositeBulkExpansion(t *testing.T) {
+	_, dir := setup(t)
+	dlc := makeDLC(t, dir)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "geosite": { "file": %q, "bulk": { "include": ["*"], "exclude": ["*@*"] } },
+  "rulesets": { "keep": { "geosite": ["netflix"] } }
+}`, filepath.ToSlash(dlc)))
+
+	run := runAll(t, cfg, Options{})
+	got := byName(run)
+	for _, want := range []string{"keep", "geosite-google", "geosite-netflix"} {
+		if got[want] == nil || !got[want].OK {
+			t.Errorf("缺规则集 %q 或它失败了", want)
+		}
+	}
+	// exclude 滤掉了属性变体
+	if got["geosite-google@ads"] != nil {
+		t.Error("bulk.exclude 没滤掉属性变体")
+	}
+	if !run.Authoritative {
+		t.Error("bulk 展开成功时名单是完整的")
+	}
+}
+
+// bulk 展开不了时**名单不完整** —— 发布方必须据此跳过孤儿清理，
+// 否则一次 GitHub 抖动会删光整个前缀。这条在旧的 shell 发布脚本里表达不出来。
+func TestGeositeBulkFailureMarksListIncomplete(t *testing.T) {
+	base, dir := setup(t)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "geosite": { "file": %q, "bulk": { "include": ["*"] } },
+  "rulesets": { "http-only": ["%s/good"] }
+}`, filepath.ToSlash(filepath.Join(dir, "missing.dat")), base))
+
+	run := runAll(t, cfg, Options{})
+	if run.Authoritative {
+		t.Error("bulk 没能展开时，规则集名单不该被当成完整的")
+	}
+	if !byName(run)["http-only"].OK {
+		t.Error("其余规则集应当照常产出")
+	}
+}
+
+// bulk 与配置里的规则集撞名：跳过并标记名单不完整，绝不静默覆盖。
+func TestGeositeBulkNameClash(t *testing.T) {
+	_, dir := setup(t)
+	dlc := makeDLC(t, dir)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "geosite": { "file": %q, "bulk": { "prefix": "", "include": ["netflix"] } },
+  "rulesets": { "netflix": { "geosite": ["google"] } }
+}`, filepath.ToSlash(dlc)))
+
+	run := runAll(t, cfg, Options{})
+	if run.Authoritative {
+		t.Error("撞名时名单不该被当成完整的")
+	}
+	// 配置里那条必须原样保留 —— 它引用的是 google 而不是 netflix
+	res := byName(run)["netflix"]
+	if res == nil || !res.OK || res.Rules != 2 {
+		t.Errorf("配置里的规则集被 bulk 覆盖了: %+v", res)
 	}
 }

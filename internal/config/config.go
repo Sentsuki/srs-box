@@ -89,6 +89,9 @@ type Geosite struct {
 	Repo      string `json:"repo,omitempty"`
 	Normalize string `json:"normalize,omitempty"`
 	Bulk      *Bulk  `json:"bulk,omitempty"`
+	// File 指定本地 dlc.dat，非空时不走网络 —— 离线跑，或者用自己从
+	// domain-list-community 源码树构建出来的那份。
+	File string `json:"file,omitempty"`
 }
 
 // Bulk 是唯一的"一条配置生成多个规则集"的口子。
@@ -202,7 +205,16 @@ func (d *Duration) UnmarshalJSON(data []byte) error {
 
 func (d Duration) Std() time.Duration { return time.Duration(d) }
 
-var nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+// nameRe 限制规则集名 —— 它会直接变成输出文件名。
+//
+// 允许 ! 和 @ 是必须的：geosite 的 bulk 会用 code 名生成规则集名，
+// 而 v2fly 的 code 里这两个字符很常见（geolocation-!cn、google@ads）。
+// 两者在 Windows 和 POSIX 文件系统上都合法，在 URL 路径段里也不用转义；
+// 官方 sing-geosite 发布的文件就叫 geosite-geolocation-!cn.srs。
+var nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._!@-]*$`)
+
+// ValidName 报告一个名字能不能当输出文件名。供 bulk 在运行时校验生成的名字。
+func ValidName(name string) bool { return nameRe.MatchString(name) }
 
 // 默认值。写在一处，校验里不再散落魔数。
 const (
@@ -313,10 +325,13 @@ func (c *Config) applyDefaults() error {
 	}
 
 	if c.Geosite != nil {
+		// 不提供 passthrough：实测 1898 个 code、73321 条值，归一化拒绝 0 条 ——
+		// 一个绕开归一管道的口子会破坏"进了集合的值必定已归一"这条契约，
+		// 而收敛和去重都依赖它。换来的好处是零。
 		switch c.Geosite.Normalize {
-		case "", "lenient", "strict", "passthrough":
+		case "", "lenient", "strict":
 		default:
-			return errf("geosite.normalize", "取值非法 %q，可选 lenient / strict / passthrough", c.Geosite.Normalize)
+			return errf("geosite.normalize", "取值非法 %q，可选 lenient / strict", c.Geosite.Normalize)
 		}
 		if b := c.Geosite.Bulk; b != nil && len(b.Include) == 0 {
 			return errf("geosite.bulk.include", "不能为空 —— 想要全量就显式写 [\"*\"]。"+

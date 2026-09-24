@@ -151,11 +151,6 @@
         "https://ruleset.skk.moe/sing-box/non_ip/cdn.json"
       ]
     },
-    "skk-cloudmounter": {
-      "sources": [
-        "https://ruleset.skk.moe/sing-box/non_ip/cloudmounter.json"
-      ]
-    },
     "skk-direct": {
       "sources": [
         "https://ruleset.skk.moe/sing-box/non_ip/direct.json"
@@ -248,8 +243,8 @@
         "https://ruleset.skk.moe/sing-box/non_ip/reject.json"
       ],
       "exclude": {
-        "files": [
-          "data/reject-allowlist.txt"
+        "inline": [
+          "DOMAIN-SUFFIX,example-i-actually-need.com"
         ]
       }
     },
@@ -266,11 +261,6 @@
     "skk-reject-no-drop": {
       "sources": [
         "https://ruleset.skk.moe/sing-box/non_ip/reject-no-drop.json"
-      ]
-    },
-    "skk-reject-url-regex": {
-      "sources": [
-        "https://ruleset.skk.moe/sing-box/non_ip/reject-url-regex.json"
       ]
     },
     "skk-sogouinput": {

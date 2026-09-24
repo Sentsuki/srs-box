@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/Sentsuki/srs-box/internal/config"
@@ -20,6 +21,7 @@ import (
 	"github.com/Sentsuki/srs-box/internal/report"
 	"github.com/Sentsuki/srs-box/internal/ruleset"
 	"github.com/Sentsuki/srs-box/internal/source"
+	"github.com/Sentsuki/srs-box/internal/source/geosite"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -68,16 +70,93 @@ func Run(ctx context.Context, cfg *config.Config, opts Options) (*report.Run, er
 		return nil, err
 	}
 
+	// bulk 必须在 dlc.dat 加载之后展开 —— 它生成的名字来自运行时的数据。
+	bulk, bulkComplete := expandBulk(cfg, sources, opts)
+	if len(opts.Only) == 0 {
+		selected = append(selected, bulk...)
+		for _, r := range bulk {
+			configured = append(configured, r.Name)
+			selectedSet[r.Name] = true
+		}
+		sort.Strings(configured)
+	}
+
 	results := build(ctx, cfg, selected, sources, opts)
 
 	run := &report.Run{
-		Results:    results,
-		Configured: configured,
-		Selected:   selectedSet,
-		// 目前唯一会让名单不完整的是 geosite.bulk 的通配符，而 bulk 还没实现。
-		Authoritative: cfg.Geosite == nil || cfg.Geosite.Bulk == nil,
+		Results:       results,
+		Configured:    configured,
+		Selected:      selectedSet,
+		Authoritative: bulkComplete,
 	}
 	return run, nil
+}
+
+// expandBulk 把 geosite.bulk 展开成一批规则集。
+//
+// 返回的 complete 为 false 表示**规则集名单不完整** —— 发布方据此跳过孤儿清理。
+// 只有两种情况会不完整：配了 bulk 但 dlc.dat 没加载成功，或者展开本身出错。
+// 那时我们根本不知道 geosite- 前缀下本该有哪些名字，一旦按不完整的名单清孤儿，
+// 一次 GitHub 抖动就会删光整个前缀。
+func expandBulk(cfg *config.Config, sources *registry, opts Options) (out []*config.Ruleset, complete bool) {
+	if cfg.Geosite == nil || cfg.Geosite.Bulk == nil {
+		return nil, true // 没配 bulk，名单全部来自配置，天然完整
+	}
+	b := cfg.Geosite.Bulk
+	if sources.geositeDown {
+		return nil, false
+	}
+	codes, err := sources.geosite.ExpandBulk(b.Include, b.Exclude)
+	if err != nil {
+		if opts.Progress != nil {
+			opts.Progress("geosite.bulk 展开失败: %v —— 本次跳过孤儿清理", err)
+		}
+		return nil, false
+	}
+	prefix := "geosite-"
+	if b.Prefix != nil {
+		prefix = *b.Prefix
+	}
+	// 撞名必须报错而不是静默覆盖：两条配置指向同一个输出文件名，
+	// 少掉一个产出而摘要上完全看不出来，正是上一次重构要消灭的那类问题。
+	taken := make(map[string]struct{}, len(cfg.Rulesets))
+	for _, r := range cfg.Rulesets {
+		taken[r.Name] = struct{}{}
+	}
+
+	out = make([]*config.Ruleset, 0, len(codes))
+	var skipped, clashed []string
+	for _, code := range codes {
+		name := prefix + code
+		if !config.ValidName(name) {
+			skipped = append(skipped, name)
+			continue
+		}
+		if _, dup := taken[name]; dup {
+			clashed = append(clashed, name)
+			continue
+		}
+		taken[name] = struct{}{}
+		spec := &config.Ruleset{Name: name}
+		spec.Geosite = []string{code}
+		out = append(out, spec)
+	}
+	if len(clashed) > 0 {
+		if opts.Progress != nil {
+			opts.Progress("geosite.bulk 与配置里的规则集撞名，已跳过: %s —— "+
+				"想让批量避开就写进 bulk.exclude", strings.Join(clashed, ", "))
+		}
+		// 撞名意味着名单不是我们以为的那份，孤儿清理不能照它来。
+		return out, false
+	}
+	if len(skipped) > 0 && opts.Progress != nil {
+		opts.Progress("geosite.bulk 跳过 %d 个名字非法的 code（如 %s）",
+			len(skipped), skipped[0])
+	}
+	if opts.Progress != nil {
+		opts.Progress("geosite.bulk 展开出 %d 个规则集", len(out))
+	}
+	return out, len(skipped) == 0
 }
 
 func selectRulesets(cfg *config.Config, only []string) ([]*config.Ruleset, error) {
@@ -109,9 +188,12 @@ func selectRulesets(cfg *config.Config, only []string) ([]*config.Ruleset, error
 // ---------------- 输入源 ----------------
 
 type registry struct {
-	http   *source.HTTP
-	file   *source.File
-	inline *source.Inline
+	http    *source.HTTP
+	file    *source.File
+	inline  *source.Inline
+	geosite *geosite.Source
+	// geositeDown 记录 geosite 整类输入是否不可用。它决定规则集名单还算不算完整。
+	geositeDown bool
 }
 
 func newRegistry(cfg *config.Config) *registry {
@@ -123,7 +205,34 @@ func newRegistry(cfg *config.Config) *registry {
 		}),
 		file:   source.NewFile("."),
 		inline: source.NewInline(),
+		geosite: geosite.New(geosite.Options{
+			Repo:      geositeRepo(cfg),
+			File:      geositeFile(cfg),
+			Normalize: geositeNormalize(cfg),
+			Timeout:   cfg.Fetch.Timeout.Std() * 4, // dlc.dat 有几 MB，比单个列表宽松些
+		}),
 	}
+}
+
+func geositeRepo(cfg *config.Config) string {
+	if cfg.Geosite != nil {
+		return cfg.Geosite.Repo
+	}
+	return ""
+}
+
+func geositeFile(cfg *config.Config) string {
+	if cfg.Geosite != nil {
+		return cfg.Geosite.File
+	}
+	return ""
+}
+
+func geositeNormalize(cfg *config.Config) geosite.Normalize {
+	if cfg.Geosite != nil {
+		return geosite.Normalize(cfg.Geosite.Normalize)
+	}
+	return ""
 }
 
 // prepare 先把全部输入的 key 收齐，再让每种源各准备一次。
@@ -131,10 +240,11 @@ func newRegistry(cfg *config.Config) *registry {
 // 收齐之后再准备，是"同一个地址被多个规则集引用只抓一次"能成立的原因 ——
 // 换成边构建边抓就做不到了。
 func (r *registry) prepare(ctx context.Context, specs []*config.Ruleset, progress func(string, ...any)) error {
-	var urls, files []string
+	var urls, files, codes []string
 	collect := func(in config.Inputs) {
 		urls = append(urls, in.Sources...)
 		files = append(files, in.Files...)
+		codes = append(codes, in.Geosite...)
 	}
 	for _, spec := range specs {
 		collect(spec.Inputs)
@@ -149,7 +259,18 @@ func (r *registry) prepare(ctx context.Context, specs []*config.Ruleset, progres
 	if err := r.http.Prepare(ctx, urls); err != nil {
 		return err
 	}
-	return r.file.Prepare(ctx, files)
+	if err := r.file.Prepare(ctx, files); err != nil {
+		return err
+	}
+	if err := r.geosite.Prepare(ctx, codes); err != nil {
+		// dlc.dat 拿不到不该让整次运行失败 —— 引用它的规则集各自记账，
+		// 其余几十个照常产出。这正是"每个规则集是独立单元"的延伸。
+		r.geositeDown = true
+		if progress != nil {
+			progress("%v —— 引用 geosite 的规则集本次不会更新", err)
+		}
+	}
+	return nil
 }
 
 func dedupe(in []string) []string {
@@ -181,11 +302,7 @@ func (r *registry) feedAll(in config.Inputs, opts source.Options, set *ruleset.R
 	feed(r.http, in.Sources)
 	feed(r.file, in.Files)
 	feed(r.inline, in.Inline)
-	// geosite 输入在第四阶段接进来。现在遇到就明确报错，不静默忽略。
-	for _, code := range in.Geosite {
-		attempted++
-		failed = append(failed, "geosite "+code+": geosite 输入源尚未实现")
-	}
+	feed(r.geosite, in.Geosite)
 	return failed, attempted
 }
 
