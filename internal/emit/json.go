@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/Sentsuki/srs-box/internal/ruleset"
 )
@@ -22,7 +23,32 @@ import (
 func JSON(w io.Writer, set *ruleset.RuleSet, version uint8) error {
 	rules := make([]json.RawMessage, 0, len(ruleset.AllFields())+len(set.Verbatim()))
 
+	// 目标地址组一条 rule 里出全 —— 和 ruleset.Options 同一个理由：规则集只有
+	// 一条 rule，sing-box 才会把它并进引用方的匹配组。见 Options 的注释。
+	var destParts []string
 	for _, f := range ruleset.AllFields() {
+		if !f.InDestinationGroup() {
+			continue
+		}
+		values := set.Values(f)
+		if len(values) == 0 {
+			continue
+		}
+		raw, err := encode(values)
+		if err != nil {
+			return fmt.Errorf("序列化 %s 失败: %w", f, err)
+		}
+		destParts = append(destParts, fmt.Sprintf("%q:%s", f.String(), raw))
+	}
+
+	for _, f := range ruleset.AllFields() {
+		if f.InDestinationGroup() {
+			if len(destParts) > 0 {
+				rules = append(rules, json.RawMessage("{"+strings.Join(destParts, ",")+"}"))
+				destParts = nil
+			}
+			continue
+		}
 		var raw json.RawMessage
 		var err error
 		if f.IsPort() {

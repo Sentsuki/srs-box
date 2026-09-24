@@ -263,6 +263,14 @@ func (res *Result) notes() []string {
 	if d.Subtracted > 0 {
 		notes = append(notes, fmt.Sprintf("差集 -%d", d.Subtracted))
 	}
+	if d.Narrowed > 0 {
+		notes = append(notes, fmt.Sprintf("排除改窄 %d", d.Narrowed))
+	}
+	// 排除唯一会不生效的情形，必须露脸：不报的话它和"本来就没有要排的东西"
+	// 在摘要上完全一样，而后果是本该排掉的规则留在产物里。
+	if d.Unexpressible > 0 {
+		notes = append(notes, fmt.Sprintf("排除不可表达 %d", d.Unexpressible))
+	}
 	// 收敛单列：它会随源的可用性波动（贡献 domain_keyword 的源挂掉，被它压住的
 	// 域名就全回来了），不单独记账的话"今天怎么多了三万条"会很难查。
 	if d.Collapsed > 0 {

@@ -27,6 +27,13 @@ func setup(t *testing.T) (base string, dir string) {
 			fmt.Fprint(w, "1.2.0.0/24\n1.2.1.0/24\n")
 		case "/allow":
 			fmt.Fprint(w, "DOMAIN-SUFFIX,other.example\n")
+		case "/clashish":
+			// Clash 的写法：+. 落成无点 domain_suffix
+			fmt.Fprint(w, "+.drop.example\n+.keep.example\n")
+		case "/geositeish":
+			// geosite RootDomain 的写法：domain + 带点 suffix 两条
+			fmt.Fprint(w, `{"version":4,"rules":[{"domain":["drop.example"],`+
+				`"domain_suffix":[".drop.example"]}]}`)
 		case "/html":
 			fmt.Fprint(w, "<html><body>404</body></html>\n")
 		case "/watermark":
@@ -171,6 +178,43 @@ func TestExcludeSubtracts(t *testing.T) {
 	}
 	if res.Diag.Subtracted == 0 {
 		t.Error("差集没生效")
+	}
+}
+
+// exclude 与主集合来自不同的源、因而是不同编码时，差集照样要生效。
+//
+// 这是最容易静默失效的一条路径：两边说的是同一件事，字符串却对不上，
+// 本该排掉的域名原样留在产物里 —— 与"exclude 的源全挂"相同的后果，
+// 而那种情况我们是直接判整个规则集失败的。
+func TestExcludeAcrossEncodings(t *testing.T) {
+	base, _ := setup(t)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "json": { "dir": "out/json" } },
+  "rulesets": {
+    "mixed": {
+      "sources": ["%s/clashish"],
+      "exclude": { "sources": ["%s/geositeish"] }
+    }
+  }
+}`, base, base))
+
+	res := byName(runAll(t, cfg, Options{}))["mixed"]
+	if !res.OK {
+		t.Fatalf("应当成功: %v", res.Err)
+	}
+	if res.Diag.Subtracted != 1 {
+		t.Errorf("差集 = %d, want 1（两边编码不同，但说的是同一件事）", res.Diag.Subtracted)
+	}
+	body, err := os.ReadFile(filepath.Join("out", "json", "mixed.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "drop.example") {
+		t.Errorf("被排除的域名漏进了产物:\n%s", body)
+	}
+	if !strings.Contains(string(body), "keep.example") {
+		t.Errorf("不该排除的域名丢了:\n%s", body)
 	}
 }
 
@@ -620,5 +664,232 @@ func TestGeositeBulkNameClash(t *testing.T) {
 	res := byName(run)["netflix"]
 	if res == nil || !res.OK || res.Rules != 2 {
 		t.Errorf("配置里的规则集被 bulk 覆盖了: %+v", res)
+	}
+}
+
+// --only 时 bulk 展开出来的名字仍然要留在规则集名单里。
+//
+// 名单是发布方判断"这个文件还该不该存在"的唯一依据。漏掉它们就等于说它们是
+// 孤儿：--only 跑一次再 publish，分支上上千个 geosite-*.srs 会被全部删掉。
+func TestOnlyKeepsBulkNamesInList(t *testing.T) {
+	_, dir := setup(t)
+	dlc := makeDLC(t, dir)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "geosite": { "file": %q, "bulk": { "include": ["*"], "exclude": ["*@*"] } },
+  "rulesets": { "keep": { "geosite": ["netflix"] } }
+}`, filepath.ToSlash(dlc)))
+
+	run := runAll(t, cfg, Options{Only: []string{"keep"}})
+
+	if !run.Authoritative {
+		t.Fatal("bulk 展开成功，名单应当是完整的")
+	}
+	var found bool
+	for _, name := range run.Configured {
+		if name == "geosite-google" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("bulk 生成的名字不在名单里，publish 会当孤儿删掉: %v", run.Configured)
+	}
+	// 本次没构建它们 —— 必须是 skipped（保留上一次发布的文件），不是 failed。
+	if got := run.Status("geosite-google"); got != report.StatusSkipped {
+		t.Errorf("geosite-google 状态 = %q, want %q", got, report.StatusSkipped)
+	}
+	if got := run.Status("keep"); got != report.StatusOK {
+		t.Errorf("keep 状态 = %q, want %q", got, report.StatusOK)
+	}
+}
+
+// 一个规则集里的 panic 不该带走其余几十个 —— "每个规则集是独立单元"
+// 这条原则在 panic 面前也得成立。
+func TestPanicIsIsolatedToOneRuleset(t *testing.T) {
+	base, _ := setup(t)
+	panicProbe = func(name string) {
+		if name == "boom" {
+			panic("构造的内部错误")
+		}
+	}
+	t.Cleanup(func() { panicProbe = nil })
+
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "rulesets": {
+    "boom": ["%s/good"],
+    "fine": ["%s/other"]
+  }
+}`, base, base))
+
+	got := byName(runAll(t, cfg, Options{}))
+	if got["boom"].OK {
+		t.Error("panic 的规则集应当判失败")
+	}
+	if got["boom"].Err == nil || !strings.Contains(got["boom"].Err.Error(), "内部错误") {
+		t.Errorf("失败原因应当说清是内部错误: %v", got["boom"].Err)
+	}
+	if !got["fine"].OK {
+		t.Errorf("其余规则集不该受牵连: %v", got["fine"].Err)
+	}
+}
+
+// 接缝测试：--only 跑出来的运行报告，发布方读回去必须仍然认得 bulk 的名字。
+//
+// bug 就藏在这个接缝上 —— build 侧和 publish 侧各自都是对的，
+// 中间那份报告漏掉一批名字，孤儿清理就会照着删。
+func TestReportFromOnlyRunKeepsBulkNames(t *testing.T) {
+	_, dir := setup(t)
+	dlc := makeDLC(t, dir)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "geosite": { "file": %q, "bulk": { "include": ["*"], "exclude": ["*@*"] } },
+  "rulesets": { "keep": { "geosite": ["netflix"] } }
+}`, filepath.ToSlash(dlc)))
+
+	run := runAll(t, cfg, Options{Only: []string{"keep"}})
+	path := filepath.Join(dir, "run-report.json")
+	if err := run.WriteJSON(path); err != nil {
+		t.Fatal(err)
+	}
+	rep, err := report.LoadJSON(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rep.Authoritative {
+		t.Fatal("名单应当是完整的")
+	}
+
+	configured := map[string]bool{}
+	for _, name := range rep.Configured() {
+		configured[name] = true
+	}
+	// publish 的孤儿判据就是这一句：不在 configured 里的已发布文件会被删掉。
+	if !configured["geosite-google"] {
+		t.Error("bulk 的名字没进报告，publish 会把它当孤儿删掉")
+	}
+	// 本次没产出，发布方应当保留上一次的文件而不是覆盖。
+	for _, name := range rep.Produced() {
+		if name != "keep" {
+			t.Errorf("报告说产出了 %q，但这次只跑了 keep", name)
+		}
+	}
+}
+
+// --only 要能点名 bulk 生成的规则集。
+//
+// 它们和配置里写死的规则集是同一种东西，只是名字来自运行时的数据；
+// 选择发生在展开之后，两者才能一视同仁。
+func TestOnlyCanSelectBulkRuleset(t *testing.T) {
+	_, dir := setup(t)
+	dlc := makeDLC(t, dir)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "geosite": { "file": %q, "bulk": { "include": ["*"], "exclude": ["*@*"] } },
+  "rulesets": { "keep": { "geosite": ["netflix"] } }
+}`, filepath.ToSlash(dlc)))
+
+	run := runAll(t, cfg, Options{Only: []string{"geosite-google"}})
+	got := byName(run)
+	if got["geosite-google"] == nil || !got["geosite-google"].OK {
+		t.Fatalf("--only 没能构建 bulk 生成的规则集: %+v", got["geosite-google"])
+	}
+	if len(run.Results) != 1 {
+		t.Errorf("只该构建一个，实际 %d 个", len(run.Results))
+	}
+	// 产物真的写出来了
+	if _, err := os.Stat(filepath.Join(dir, "out", "srs", "geosite-google.srs")); err != nil {
+		t.Errorf("缺产物: %v", err)
+	}
+	// 其余的一律 skipped —— 发布方保留上一次的文件
+	for _, name := range []string{"keep", "geosite-netflix"} {
+		if s := run.Status(name); s != report.StatusSkipped {
+			t.Errorf("%s 状态 = %q, want %q", name, s, report.StatusSkipped)
+		}
+	}
+}
+
+// 点名一个谁都不认识的名字仍然要报错，而且要说清两边都找过了。
+func TestOnlyUnknownNameStillFails(t *testing.T) {
+	_, dir := setup(t)
+	dlc := makeDLC(t, dir)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "geosite": { "file": %q, "bulk": { "include": ["*"] } },
+  "rulesets": { "keep": { "geosite": ["netflix"] } }
+}`, filepath.ToSlash(dlc)))
+
+	_, err := Run(context.Background(), cfg, Options{Only: []string{"nope"}})
+	if err == nil {
+		t.Fatal("点名不存在的规则集应当报错")
+	}
+	if !strings.Contains(err.Error(), "nope") || !strings.Contains(err.Error(), "bulk") {
+		t.Errorf("错误信息应当说清找过哪两处: %v", err)
+	}
+}
+
+// 一份只有 bulk、没有任何规则集显式引用 geosite 的配置，bulk 也要能展开。
+//
+// 以前 dlc.dat 加不加载取决于"选中的规则集引用了哪些 code"，于是这种配置
+// 永远展不开 bulk，而且展不开这件事只体现为"名单不完整"，很难往这想。
+func TestBulkExpandsWithoutAnyGeositeRuleset(t *testing.T) {
+	base, dir := setup(t)
+	dlc := makeDLC(t, dir)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "geosite": { "file": %q, "bulk": { "include": ["*"], "exclude": ["*@*"] } },
+  "rulesets": { "http-only": ["%s/good"] }
+}`, filepath.ToSlash(dlc), base))
+
+	run := runAll(t, cfg, Options{})
+	if !run.Authoritative {
+		t.Error("bulk 展开成功时名单应当是完整的")
+	}
+	got := byName(run)
+	if got["geosite-google"] == nil || !got["geosite-google"].OK {
+		t.Errorf("没有规则集显式引用 geosite 时 bulk 也该展开: %+v", got["geosite-google"])
+	}
+	if !got["http-only"].OK {
+		t.Errorf("普通规则集不该受影响: %v", got["http-only"].Err)
+	}
+}
+
+// 没配 bulk 时，--only 一个不碰 geosite 的规则集就不该去加载 dlc.dat。
+//
+// geosite.file 指向一个不存在的文件：真去加载一定会报错并打进度，
+// 所以"进度里没有 geosite 字样"就等于"没去加载"。
+func TestOnlySkipsGeositeLoadWhenNotNeeded(t *testing.T) {
+	base, dir := setup(t)
+	cfg := load(t, fmt.Sprintf(`{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "out/srs" } },
+  "geosite": { "file": %q },
+  "rulesets": {
+    "http-only": ["%s/good"],
+    "geo": { "geosite": ["netflix"] }
+  }
+}`, filepath.ToSlash(filepath.Join(dir, "missing.dat")), base))
+
+	var lines []string
+	run, err := Run(context.Background(), cfg, Options{
+		Only:     []string{"http-only"},
+		Progress: func(format string, args ...any) { lines = append(lines, fmt.Sprintf(format, args...)) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !byName(run)["http-only"].OK {
+		t.Error("规则集应当构建成功")
+	}
+	for _, line := range lines {
+		if strings.Contains(line, "geosite") {
+			t.Errorf("--only 不碰 geosite 的规则集时不该加载 dlc.dat，却打了: %s", line)
+		}
 	}
 }

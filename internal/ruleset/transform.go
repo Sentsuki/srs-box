@@ -11,8 +11,9 @@ import (
 //
 //	Subtract → Collapse → DropValuesContaining → AggregateCIDR
 //
-// 差集必须在收敛之前：收敛会把等价写法压成一种，压完之后待删项可能已经变成了
-// 另一种形态，再做差就删不掉了。
+// 差集必须在收敛之前：收敛会把 {domain:a.com, suffix:.a.com} 压成无点的
+// suffix:a.com，"只排掉 apex"这个本来能表达的操作就此消失。差集怎么对上两种
+// 编码而又不依赖先收敛主集合，见 subtract.go。
 
 // AggregateCIDR 合并相邻或包含的网段，返回减少的条数。
 //
@@ -123,60 +124,4 @@ func hits(value string, needles []string) bool {
 		}
 	}
 	return false
-}
-
-// Subtract 从本集合里减去 other 的内容，返回删除条数。
-//
-// 只对拆成字段的值做差。透传规则无法有意义地做差 —— 从一条 logical 规则里
-// "减掉"另一条不是一个有定义的操作 —— 所以只在去重键完全相同时删除，
-// 其余原样留下并记进诊断。
-func (s *RuleSet) Subtract(other *RuleSet) int {
-	removed := 0
-	for f, m := range s.strs {
-		drop := other.strs[f]
-		if len(drop) == 0 {
-			continue
-		}
-		for v := range m {
-			if _, found := drop[v]; found {
-				delete(m, v)
-				removed++
-			}
-		}
-	}
-	for f, m := range s.ports {
-		drop := other.ports[f]
-		if len(drop) == 0 {
-			continue
-		}
-		for v := range m {
-			if _, found := drop[v]; found {
-				delete(m, v)
-				removed++
-			}
-		}
-	}
-
-	if len(other.seen) > 0 && len(s.verbatim) > 0 {
-		kept := s.verbatim[:0:0]
-		for _, rule := range s.verbatim {
-			key, err := marshalRule(rule)
-			if err != nil {
-				kept = append(kept, rule)
-				continue
-			}
-			if _, found := other.seen[string(key)]; found {
-				delete(s.seen, string(key))
-				removed++
-				continue
-			}
-			kept = append(kept, rule)
-		}
-		s.verbatim = kept
-	}
-	if skipped := len(other.verbatim); skipped > 0 {
-		s.Diag.BadValue("verbatim", "exclude 里的透传规则只按完全相同匹配，未做语义差集")
-	}
-	s.Diag.Subtracted += removed
-	return removed
 }
