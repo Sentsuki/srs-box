@@ -1,8 +1,14 @@
 {
   "ruleset_version": 4,
   "output": {
-    "json_dir": "output/json",
-    "srs_dir": "output/srs"
+    "srs": {
+      "dir": "output/srs",
+      "branch": "srs_release"
+    },
+    "json": {
+      "dir": "output/json",
+      "branch": "json_release"
+    }
   },
   "fetch": {
     "concurrency": 16,
