@@ -64,12 +64,7 @@
     "block-ads": {
       "sources": [
         "https://github.com/TG-Twilight/AWAvenue-Ads-Rule/raw/refs/heads/main/Filters/AWAvenue-Ads-Rule-Singbox.json"
-      ],
-      "exclude": {
-        "geosite": [
-          "google@ads"
-        ]
-      }
+      ]
     },
     "block-dns": {
       "sources": [
