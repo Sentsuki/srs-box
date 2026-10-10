@@ -111,7 +111,7 @@ type Inputs struct {
 	Sources stringList `json:"sources,omitempty"`
 	Files   stringList `json:"files,omitempty"`
 	Geosite stringList `json:"geosite,omitempty"`
-	Inline  stringList `json:"inline,omitempty"`
+	Inline  ruleList   `json:"inline,omitempty"`
 }
 
 func (i Inputs) empty() bool {
@@ -158,7 +158,7 @@ func (r *Ruleset) UnmarshalJSON(data []byte) error {
 
 // stringList 接受单个字符串或字符串数组。
 //
-// sources / files / geosite / inline 四个键同构，都用它 —— "一个还是一组"
+// sources / files / geosite 三个键同构，都用它 —— "一个还是一组"
 // 这种事不该让人记住写法差异。
 type stringList []string
 
@@ -178,6 +178,41 @@ func (l *stringList) UnmarshalJSON(data []byte) error {
 	}
 	*l = many
 	return nil
+}
+
+// ruleList 是 inline 的取值：一条 sing-box headless rule 对象，或者它们的数组 ——
+// 与 sing-box inline rule-set 里 rules 的元素同形。
+//
+// 这里只收原始 JSON，不判断每一项是什么：非对象（比如旧写法的
+// "DOMAIN-SUFFIX,a.com"）留给 validateInputs 报错，错误才能带上 inline[i] 的位置。
+type ruleList []json.RawMessage
+
+func (l *ruleList) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) > 0 && trimmed[0] != '[' {
+		*l = ruleList{append(json.RawMessage(nil), trimmed...)}
+		return nil
+	}
+	var many []json.RawMessage
+	if err := json.Unmarshal(data, &many); err != nil {
+		return err
+	}
+	*l = many
+	return nil
+}
+
+// Keys 把每条规则压成紧凑 JSON，作为 inline 源的 key。
+func (l ruleList) Keys() []string {
+	out := make([]string, len(l))
+	for i, raw := range l {
+		var buf bytes.Buffer
+		if err := json.Compact(&buf, raw); err != nil {
+			out[i] = string(raw) // 校验过的配置不会走到这里
+			continue
+		}
+		out[i] = buf.String()
+	}
+	return out
 }
 
 // Duration 接受 Go duration 字符串（"30s"），也接受裸数字（按秒）。
@@ -399,8 +434,13 @@ func validateInputs(in Inputs, where string) error {
 		}
 	}
 	for i, raw := range in.Inline {
-		if strings.TrimSpace(raw) == "" {
-			return errf(fmt.Sprintf("%s.inline[%d]", where, i), "内联规则不能为空")
+		at := fmt.Sprintf("%s.inline[%d]", where, i)
+		if trimmed := bytes.TrimSpace(raw); len(trimmed) == 0 || trimmed[0] != '{' {
+			return errf(at, "inline 只接受 sing-box headless rule 对象，"+
+				`例如 {"domain_suffix": ["example.com"]}。Clash / Surge 规则行请放进 files`)
+		}
+		if err := parse.ValidateRule(raw); err != nil {
+			return errf(at, "%v", err)
 		}
 	}
 	return nil

@@ -445,7 +445,7 @@ func TestLocalFileInput(t *testing.T) {
 	cfg := load(t, `{
   "ruleset_version": 4,
   "output": { "srs": { "dir": "out/srs" } },
-  "rulesets": { "local": { "files": ["data/list.txt"], "inline": ["DOMAIN-SUFFIX,inline.example"] } }
+  "rulesets": { "local": { "files": ["data/list.txt"], "inline": { "domain_suffix": "inline.example" } } }
 }`)
 	res := byName(runAll(t, cfg, Options{}))["local"]
 	if !res.OK {
@@ -907,8 +907,8 @@ func TestUnmergeableArtifactIsReported(t *testing.T) {
   "ruleset_version": 4,
   "output": { "json": { "dir": "out/json" } },
   "rulesets": {
-    "plain":    { "inline": ["DOMAIN-SUFFIX,a.example", "DOMAIN,b.example"] },
-    "logical":  { "inline": ["DOMAIN-SUFFIX,a.example", "AND,((DOMAIN,c.example),(DOMAIN-SUFFIX,d.example))"] }
+    "plain":    { "inline": [{ "domain_suffix": "a.example" }, { "domain": "b.example" }] },
+    "logical":  { "inline": [{ "domain_suffix": "a.example" }, { "type": "logical", "mode": "and", "rules": [{ "domain": "c.example" }, { "domain_suffix": "d.example" }] }] }
   }
 }`)
 
@@ -945,7 +945,7 @@ func TestCancelledRunIsAnError(t *testing.T) {
 	cfg := load(t, `{
   "ruleset_version": 4,
   "output": { "srs": { "dir": "out/srs" } },
-  "rulesets": { "a": { "inline": ["DOMAIN,a.example"] }, "b": { "inline": ["DOMAIN,b.example"] } }
+  "rulesets": { "a": { "inline": [{ "domain": "a.example" }] }, "b": { "inline": [{ "domain": "b.example" }] } }
 }`)
 
 	ctx, cancel := context.WithCancel(context.Background())

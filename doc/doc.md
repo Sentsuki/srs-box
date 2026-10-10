@@ -102,14 +102,14 @@ Geosite 数据源及相关配置：
 
 ### 输入源
 
-一个规则集支持同时配置以下多种输入源（均支持单个字符串或字符串数组）：
+一个规则集支持同时配置以下多种输入源（均支持单个值或数组）：
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `sources` | string / string[] | HTTP/HTTPS 远程规则文件 URL |
 | `files` | string / string[] | 本地规则文件路径（相对工作目录） |
 | `geosite` | string / string[] | Geosite code 名称或 glob 模式（如 `"cn"`、`"google@ads"`、`"category-*-cn"`） |
-| `inline` | string / string[] | 内联规则文本（如 `"DOMAIN-SUFFIX,example.com"`） |
+| `inline` | object / object[] | 内联 sing-box headless rule（如 `{"domain_suffix": ["example.com"]}`），写法与 sing-box inline rule-set 的 `rules` 元素相同；不接受 Clash / Surge 规则行 |
 
 > **简写形式**：若规则集的值直接为字符串或字符串数组，等价于仅配置 `sources`。例如：
 > ```json

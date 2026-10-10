@@ -340,9 +340,12 @@ func TestFileRejectsEscapingRoot(t *testing.T) {
 func TestInline(t *testing.T) {
 	src := NewInline()
 	set := ruleset.New("t")
-	for _, line := range []string{"DOMAIN-SUFFIX,anthropic.com", "DOMAIN-KEYWORD,openai", "+.bare.example"} {
-		if err := src.Feed(line, Options{}, set); err != nil {
-			t.Fatalf("Feed(%q): %v", line, err)
+	for _, rule := range []string{
+		`{"domain_suffix":["anthropic.com","bare.example"]}`,
+		`{"domain_keyword":"openai"}`,
+	} {
+		if err := src.Feed(rule, Options{}, set); err != nil {
+			t.Fatalf("Feed(%q): %v", rule, err)
 		}
 	}
 	if got := set.Values(ruleset.FieldDomainSuffix); !reflect.DeepEqual(got, []string{"anthropic.com", "bare.example"}) {
@@ -350,6 +353,23 @@ func TestInline(t *testing.T) {
 	}
 	if got := set.Values(ruleset.FieldDomainKeyword); !reflect.DeepEqual(got, []string{"openai"}) {
 		t.Errorf("domain_keyword = %v", got)
+	}
+}
+
+// inline 只认 sing-box 规则对象：规则行、裸值、拼错的字段都必须当场失败，
+// 而不是被行提取器"宽容地"解析成另一条规则。
+func TestInlineRejectsNonSingBox(t *testing.T) {
+	for _, bad := range []string{
+		"DOMAIN-SUFFIX,anthropic.com",
+		"+.bare.example",
+		`{"payload":["DOMAIN,a.example"]}`,
+		`{"domain_sufix":["a.example"]}`,
+		`{}`,
+	} {
+		set := ruleset.New("t")
+		if err := NewInline().Feed(bad, Options{}, set); err == nil {
+			t.Errorf("Feed(%q) 应当失败", bad)
+		}
 	}
 }
 
@@ -383,7 +403,7 @@ func TestMixedSourcesIntoOneRuleset(t *testing.T) {
 	if err := fileSrc.Feed("local.list", Options{}, set); err != nil {
 		t.Fatal(err)
 	}
-	if err := NewInline().Feed("+.example.com", Options{}, set); err != nil {
+	if err := NewInline().Feed(`{"domain_suffix":"example.com"}`, Options{}, set); err != nil {
 		t.Fatal(err)
 	}
 

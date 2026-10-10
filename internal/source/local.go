@@ -95,9 +95,9 @@ func (f *File) Feed(key string, opts Options, into *ruleset.RuleSet) error {
 	return nil
 }
 
-// Inline 是配置里直写的规则行。
+// Inline 是配置里直写的 sing-box headless rule。
 //
-// key 就是那一行本身，所以不需要准备任何东西。留着这个源而不是让 pipeline
+// key 就是那条规则的 JSON 本身，所以不需要准备任何东西。留着这个源而不是让 pipeline
 // 直接调解析层，是为了让"一个规则集的输入"在代码里是同一种东西 —— 错误记账、
 // 失败隔离、摘要展示都只有一条路径。
 type Inline struct{}
@@ -109,7 +109,7 @@ func (Inline) Kind() string { return "inline" }
 func (Inline) Prepare(context.Context, []string) error { return nil }
 
 func (Inline) Feed(key string, opts Options, into *ruleset.RuleSet) error {
-	if err := parse.Into([]byte(key), opts.Format, into); err != nil {
+	if err := parse.Rule([]byte(key), opts.Format, into); err != nil {
 		return feedErr("inline", key, err)
 	}
 	return nil

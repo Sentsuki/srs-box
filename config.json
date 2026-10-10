@@ -113,7 +113,11 @@
         "category-*@cn"
       ],
       "inline": [
-        "DOMAIN-SUFFIX,.cn"
+        {
+          "domain_suffix": [
+            ".cn"
+          ]
+        }
       ]
     },
     "geosite-google": {
@@ -121,7 +125,11 @@
         "google"
       ],
       "inline": [
-        "DOMAIN-KEYWORD,google"
+        {
+          "domain_keyword": [
+            "google"
+          ]
+        }
       ],
       "exclude": {
         "geosite": [

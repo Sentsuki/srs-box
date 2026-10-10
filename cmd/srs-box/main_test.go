@@ -18,17 +18,17 @@ const goodConfig = `{
   "ruleset_version": 4,
   "output": { "srs": { "dir": "out/srs", "branch": "srs_release" } },
   "rulesets": {
-    "good": { "inline": ["DOMAIN,a.example"] }
+    "good": { "inline": [{ "domain": "a.example" }] }
   }
 }`
 
-// partialConfig 一好一坏：只有注释的 inline 解析后一条规则都没有。
+// partialConfig 一好一坏：取值非法的 inline 能过配置校验，但构建时一条规则都留不下。
 const partialConfig = `{
   "ruleset_version": 4,
   "output": { "srs": { "dir": "out/srs" } },
   "rulesets": {
-    "good": { "inline": ["DOMAIN,a.example"] },
-    "bad":  { "inline": ["# 只有注释"] }
+    "good": { "inline": [{ "domain": "a.example" }] },
+    "bad":  { "inline": [{ "ip_cidr": "not-an-ip" }] }
   }
 }`
 
@@ -36,7 +36,7 @@ const allBadConfig = `{
   "ruleset_version": 4,
   "output": { "srs": { "dir": "out/srs" } },
   "rulesets": {
-    "bad": { "inline": ["# 只有注释"] }
+    "bad": { "inline": [{ "ip_cidr": "not-an-ip" }] }
   }
 }`
 
@@ -188,7 +188,7 @@ func TestPublishWithoutBranchIsNoop(t *testing.T) {
 	inTempDir(t, `{
   "ruleset_version": 4,
   "output": { "srs": { "dir": "out/srs" } },
-  "rulesets": { "good": { "inline": ["DOMAIN,a.example"] } }
+  "rulesets": { "good": { "inline": [{ "domain": "a.example" }] } }
 }`)
 	if code, out := capture(t, func() int {
 		return run([]string{"build", "--report", "run-report.json", "-q"})

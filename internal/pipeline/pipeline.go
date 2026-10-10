@@ -361,7 +361,7 @@ func (r *registry) feedAll(in config.Inputs, opts source.Options, set *ruleset.R
 	}
 	feed(r.http, in.Sources)
 	feed(r.file, in.Files)
-	feed(r.inline, in.Inline)
+	feed(r.inline, in.Inline.Keys())
 	feed(r.geosite, in.Geosite)
 	return failed, attempted
 }

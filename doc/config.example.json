@@ -48,8 +48,14 @@
         "telegram"
       ],
       "inline": [
-        "DOMAIN-SUFFIX,internal.example.com",
-        "DOMAIN-KEYWORD,local"
+        {
+          "domain_suffix": [
+            "internal.example.com"
+          ],
+          "domain_keyword": [
+            "local"
+          ]
+        }
       ]
     },
     "direct-cidr": {
@@ -59,8 +65,12 @@
         "https://example.com/rules/china_ip.txt"
       ],
       "inline": [
-        "192.168.0.0/16",
-        "10.0.0.0/8"
+        {
+          "ip_cidr": [
+            "192.168.0.0/16",
+            "10.0.0.0/8"
+          ]
+        }
       ]
     },
     "google-no-ads": {

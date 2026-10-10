@@ -175,8 +175,8 @@ func TestMixedInputsAndExclude(t *testing.T) {
       "files": ["data/claude.json"],
       "sources": ["https://example.com/ai.json"],
       "geosite": ["category-ai-chat-!cn"],
-      "inline": ["DOMAIN-SUFFIX,anthropic.com"],
-      "exclude": { "inline": ["DOMAIN,skip.example"] },
+      "inline": [{ "domain_suffix": ["anthropic.com"] }],
+      "exclude": { "inline": { "domain": "skip.example" } },
       "collapse": false,
       "aggregate": true
     }
@@ -277,6 +277,33 @@ func TestRejectsEmptyInputs(t *testing.T) {
   "output": { "srs": { "dir": "output/srs" } },
   "rulesets": { "a": { "aggregate": true } }
 }`, "一个输入都没有")
+}
+
+// inline 只收 sing-box headless rule 对象，错误要指到具体那一项。
+func TestInlineOnlyAcceptsSingBoxRules(t *testing.T) {
+	cases := []struct{ inline, want string }{
+		{`"DOMAIN-SUFFIX,a.example"`, "rulesets.a.inline[0]"},
+		{`[{ "domain": "a.example" }, "+.b.example"]`, "rulesets.a.inline[1]"},
+		{`[{ "domain_sufix": "a.example" }]`, "domain_sufix"},
+		{`[{ "port": "https" }]`, "rulesets.a.inline[0]"},
+		{`[{ "type": "logical", "mode": "and", "rules": [{ "domian": "a" }] }]`, "rulesets.a.inline[0]"},
+		{`[{}]`, "没有任何匹配条件"},
+	}
+	for _, c := range cases {
+		mustFail(t, `{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "output/srs" } },
+  "rulesets": { "a": { "inline": `+c.inline+` } }
+}`, c.want)
+	}
+	cfg := load(t, `{
+  "ruleset_version": 4,
+  "output": { "srs": { "dir": "output/srs" } },
+  "rulesets": { "a": { "inline": { "domain_suffix": ["a.example"], "port": 443 } } }
+}`)
+	if got := len(cfg.Rulesets[0].Inline); got != 1 {
+		t.Errorf("单个对象应当等于一个元素的数组，实际 %d 项", got)
+	}
 }
 
 func TestRejectsBadURL(t *testing.T) {
