@@ -23,7 +23,7 @@
     "normal-ai": {
       "sources": [
         "https://github.com/viewer12/OverseasAI.list/raw/refs/heads/main/rule/Singbox/OverseasAI/OverseasAI.json",
-https://raw.githubusercontent.com/RocM301/Apple-Rule/refs/heads/main/Apple-AI.json
+"https://raw.githubusercontent.com/RocM301/Apple-Rule/refs/heads/main/Apple-AI.json"
       ],
       "files": [
         "data/Apple_Intelligence.json"
